@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { UserAvatar } from './common/UserAvatar';
-import { ProfilePhotoModal } from './common/ProfilePhotoModal';
 import {
   LogIn,
   LogOut,
@@ -12,7 +11,6 @@ import {
   BookOpen,
   Award,
   Users,
-  Camera,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -26,7 +24,6 @@ export const Header: React.FC = () => {
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
   const getRoleBadge = (role: string) => {
     switch (role) {
@@ -174,17 +171,6 @@ export const Header: React.FC = () => {
                         </button>
                         <button
                           onClick={() => {
-                            setIsPhotoModalOpen(true);
-                            setIsUserMenuOpen(false);
-                          }}
-                          className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium"
-                          id="header-update-photo-btn"
-                        >
-                          <Camera className="w-3.5 h-3.5 text-blue-600" />
-                          Update Profile Photo
-                        </button>
-                        <button
-                          onClick={() => {
                             setCurrentView('public');
                             setIsUserMenuOpen(false);
                           }}
@@ -235,12 +221,6 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Profile Photo Upload Modal */}
-      <ProfilePhotoModal
-        isOpen={isPhotoModalOpen}
-        onClose={() => setIsPhotoModalOpen(false)}
-      />
     </header>
   );
 };

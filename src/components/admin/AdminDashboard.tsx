@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { UserRole, SchoolClass, ACADEMIC_LEVELS } from '../../types';
+import { User, UserRole, SchoolClass, ACADEMIC_LEVELS } from '../../types';
 import { AccountDirectoryManager } from './AccountDirectoryManager';
+import { formatWhatsAppCredentials } from '../../utils/credentialGenerator';
 import {
   Users,
   UserPlus,
@@ -36,6 +37,8 @@ import {
   Edit3,
   X,
   Check,
+  Copy,
+  Share2,
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -82,6 +85,8 @@ export const AdminDashboard: React.FC = () => {
   const [singleAddress, setSingleAddress] = useState('');
   const [singleClassId, setSingleClassId] = useState(classes[0]?.id || '');
   const [userSuccessMsg, setUserSuccessMsg] = useState<string | null>(null);
+  const [lastCreatedUser, setLastCreatedUser] = useState<User | null>(null);
+  const [justCopiedCreatedUser, setJustCopiedCreatedUser] = useState(false);
 
   // Bulk Users Form State
   const [bulkRole, setBulkRole] = useState<UserRole>('student');
@@ -155,11 +160,12 @@ export const AdminDashboard: React.FC = () => {
   const handleCreateSingleUser = (e: React.FormEvent) => {
     e.preventDefault();
     setUserSuccessMsg(null);
+    setJustCopiedCreatedUser(false);
 
     const newUser = createAccount(
       {
         fullName: singleName,
-        email: singleEmail,
+        email: singleEmail.trim() || undefined,
         role: singleRole,
         phoneNumber: singlePhone || '+1 (555) 000-0000',
       },
@@ -173,13 +179,35 @@ export const AdminDashboard: React.FC = () => {
         : undefined
     );
 
-    setUserSuccessMsg(`Successfully created ${newUser.role.toUpperCase()} account for ${newUser.fullName} (${newUser.email})`);
+    setLastCreatedUser(newUser);
+    setUserSuccessMsg(`Account created for ${newUser.fullName}! Auto-generated Username: ${newUser.username} | Password: ${newUser.tempPassword}`);
     setSingleName('');
     setSingleEmail('');
     setSinglePhone('');
     setSingleParentName('');
     setSingleParentPhone('');
     setSingleAddress('');
+  };
+
+  const handleCopyCreatedUserWhatsApp = (user: User) => {
+    const studentDet = studentDetails.find((d) => d.studentId === user.id);
+    const assignedClass = classes.find((c) =>
+      user.role === 'teacher' ? c.teacherId === user.id : c.id === studentDet?.classId
+    );
+    const msg = formatWhatsAppCredentials({
+      fullName: user.fullName,
+      role: user.role,
+      username: user.username || user.email.split('@')[0],
+      password: user.tempPassword,
+      email: user.email,
+      className: assignedClass?.name,
+      schoolName: schoolInfo.name || 'ACEBEE Academy',
+    });
+    navigator.clipboard.writeText(msg);
+    setJustCopiedCreatedUser(true);
+    setTimeout(() => {
+      setJustCopiedCreatedUser(false);
+    }, 2500);
   };
 
   // Handle Bulk Creation
@@ -190,13 +218,21 @@ export const AdminDashboard: React.FC = () => {
     const lines = bulkText.split('\n').filter((l) => l.trim().length > 0);
     const parsedAccounts = lines.map((line) => {
       const parts = line.split(',').map((p) => p.trim());
+      // Handle both formats: (Name, Email, Phone...) or (Name, Phone, ParentName...)
+      const hasEmail = parts[1] && parts[1].includes('@');
+      const emailVal = hasEmail ? parts[1] : undefined;
+      const phoneVal = hasEmail ? parts[2] : parts[1];
+      const parentNameVal = hasEmail ? parts[3] : parts[2];
+      const parentPhoneVal = hasEmail ? parts[4] : parts[3];
+      const addressVal = hasEmail ? parts[5] : parts[4];
+
       return {
         fullName: parts[0] || 'Unknown User',
-        email: parts[1] || `user.${Date.now()}@acebee.edu`,
-        phoneNumber: parts[2] || '+1 (555) 000-0000',
-        parentName: parts[3] || 'Parent / Guardian',
-        parentPhone: parts[4] || '+1 (555) 000-0000',
-        address: parts[5] || 'Address on file',
+        email: emailVal,
+        phoneNumber: phoneVal || '+1 (555) 000-0000',
+        parentName: parentNameVal || 'Parent / Guardian',
+        parentPhone: parentPhoneVal || '+1 (555) 000-0000',
+        address: addressVal || 'Address on file',
         role: bulkRole,
       };
     });
@@ -675,9 +711,40 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             {userSuccessMsg && (
-              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{userSuccessMsg}</span>
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-2">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span className="font-semibold leading-relaxed">{userSuccessMsg}</span>
+                </div>
+                {lastCreatedUser && (
+                  <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-emerald-800">
+                      Copy credentials ready to paste in WhatsApp:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCreatedUserWhatsApp(lastCreatedUser)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs shrink-0 ${
+                        justCopiedCreatedUser
+                          ? 'bg-emerald-700 text-white'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      }`}
+                      id="copy-created-whatsapp-btn"
+                    >
+                      {justCopiedCreatedUser ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Copied for WhatsApp!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>1-Click Copy WhatsApp</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -719,14 +786,13 @@ export const AdminDashboard: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Email Address *
+                    Email Address <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="email"
-                    required
                     value={singleEmail}
                     onChange={(e) => setSingleEmail(e.target.value)}
-                    placeholder="e.g. ben.h@student.acebee.edu"
+                    placeholder="Optional email address"
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                     id="single-account-email-input"
                   />

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Subject, CommentCategory, QuizQuestion, StudentDetail } from '../../types';
 import { UserAvatar } from '../common/UserAvatar';
-import { ProfilePhotoModal } from '../common/ProfilePhotoModal';
 import {
   BookOpen,
   Users,
@@ -21,7 +20,6 @@ import {
   Calendar,
   Send,
   HelpCircle,
-  Camera,
 } from 'lucide-react';
 
 export const TeacherDashboard: React.FC = () => {
@@ -41,7 +39,6 @@ export const TeacherDashboard: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'roster' | 'quizzes' | 'behavior' | 'gradebook'>('roster');
-  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
   // Find teacher's assigned class
   const teacherClass = classes.find((c) => c.teacherId === currentUser?.id) || classes[0];
@@ -208,22 +205,13 @@ export const TeacherDashboard: React.FC = () => {
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
 
         <div className="flex items-center gap-4 relative z-10">
-          <div className="relative group">
+          <div className="relative">
             <UserAvatar
               name={currentUser?.fullName}
-              avatarUrl={currentUser?.avatarUrl}
               role="teacher"
               size="xl"
               className="border-2 border-white/20 shadow-md"
             />
-            <button
-              onClick={() => setIsPhotoModalOpen(true)}
-              className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-500 text-white p-1.5 rounded-full shadow-md border-2 border-blue-900 transition-transform active:scale-95"
-              title="Upload / Change Profile Picture"
-              id="teacher-avatar-edit-btn"
-            >
-              <Camera className="w-3.5 h-3.5" />
-            </button>
           </div>
 
           <div>
@@ -241,14 +229,6 @@ export const TeacherDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3 relative z-10 shrink-0">
-          <button
-            onClick={() => setIsPhotoModalOpen(true)}
-            className="px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-semibold text-white flex items-center gap-1.5 transition-colors"
-            id="teacher-upload-photo-btn"
-          >
-            <Camera className="w-4 h-4 text-blue-200" />
-            <span>Upload Photo</span>
-          </button>
           <div className="hidden sm:flex items-center gap-2 bg-blue-950/80 px-4 py-2.5 rounded-lg border border-blue-800/80 text-xs text-blue-100">
             <Sparkles className="w-4 h-4 text-blue-300" />
             <span>Curriculum: Math, English, Science, Social Studies, Art</span>
@@ -1026,12 +1006,6 @@ export const TeacherDashboard: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Teacher Profile Photo Modal */}
-      <ProfilePhotoModal
-        isOpen={isPhotoModalOpen}
-        onClose={() => setIsPhotoModalOpen(false)}
-      />
     </div>
   );
 };

@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import {
   X,
   Lock,
-  Mail,
+  User as UserIcon,
   ShieldCheck,
   AlertCircle,
   ArrowRight,
@@ -12,7 +12,7 @@ import {
 export const LoginModal: React.FC = () => {
   const { isLoginModalOpen, setIsLoginModalOpen, login } = useApp();
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,12 +25,12 @@ export const LoginModal: React.FC = () => {
     setIsLoading(true);
 
     setTimeout(() => {
-      const res = login(email, password);
+      const res = login(identifier, password);
       setIsLoading(false);
       if (!res.success) {
         setErrorMsg(res.message || 'Login failed. Please verify your credentials.');
       }
-    }, 200);
+    }, 150);
   };
 
   return (
@@ -65,7 +65,7 @@ export const LoginModal: React.FC = () => {
           <div className="mt-4 p-2.5 rounded-lg bg-blue-950/50 border border-blue-800/80 text-xs text-blue-100 flex items-start gap-2 relative z-10">
             <AlertCircle className="w-4 h-4 text-blue-300 shrink-0 mt-0.5" />
             <span>
-              <strong>Access Policy:</strong> All staff, student, and parent accounts must be created by the School Administrator.
+              <strong>Access Policy:</strong> All staff, student, and parent accounts are created by the School Administrator with auto-generated credentials.
             </span>
           </div>
         </div>
@@ -82,18 +82,18 @@ export const LoginModal: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Account Email
+                Login Username or Email
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. your-email@domain.com"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="e.g. stu_alexander or admin@lb.com"
                   className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-slate-900 bg-white"
-                  id="login-email-input"
+                  id="login-identifier-input"
                 />
               </div>
             </div>

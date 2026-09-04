@@ -19,6 +19,8 @@ export type Subject = 'Mathematics' | 'English' | 'Science' | 'Social Studies' |
 export interface User {
   id: string;
   email: string;
+  username?: string;
+  tempPassword?: string;
   fullName: string;
   role: UserRole;
   phoneNumber?: string;

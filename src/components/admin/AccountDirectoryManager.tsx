@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { User, UserRole, StudentDetail } from '../../types';
 import { UserAvatar } from '../common/UserAvatar';
+import { formatWhatsAppCredentials } from '../../utils/credentialGenerator';
 import {
   Search,
   Pencil,
@@ -24,6 +25,9 @@ import {
   Shield,
   Layers,
   Sparkles,
+  Copy,
+  Check,
+  Share2,
 } from 'lucide-react';
 
 interface AccountDirectoryManagerProps {
@@ -33,12 +37,13 @@ interface AccountDirectoryManagerProps {
 
 export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = ({
   title = 'System User Directory & Account Governance',
-  subtitle = 'Manage individual credentials, edit profile details, assign classes, and execute bulk account operations.',
+  subtitle = 'Manage individual credentials, view auto-generated usernames/passwords, copy for WhatsApp in 1-click, and execute bulk account operations.',
 }) => {
   const {
     users,
     classes,
     studentDetails,
+    schoolInfo,
     updateAccount,
     deleteAccount,
     bulkDeleteAccounts,
@@ -63,9 +68,14 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
 
+  // Copy feedback state
+  const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
+
   // Edit Form State
   const [editFullName, setEditFullName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('student');
   const [editPhone, setEditPhone] = useState('');
   const [editClassId, setEditClassId] = useState('');
@@ -77,10 +87,55 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
   const [editNotes, setEditNotes] = useState('');
   const [editSuccessMsg, setEditSuccessMsg] = useState<string | null>(null);
 
+  // 1-Click Copy to WhatsApp
+  const handleCopyWhatsApp = (user: User) => {
+    const studentDet = studentDetails.find((d) => d.studentId === user.id);
+    const assignedClass = classes.find((c) =>
+      user.role === 'teacher' ? c.teacherId === user.id : c.id === studentDet?.classId
+    );
+    const msg = formatWhatsAppCredentials({
+      fullName: user.fullName,
+      role: user.role,
+      username: user.username || user.email.split('@')[0],
+      password: user.tempPassword,
+      email: user.email,
+      className: assignedClass?.name,
+      schoolName: schoolInfo.name || 'ACEBEE Academy',
+    });
+    navigator.clipboard.writeText(msg);
+    setCopiedUserId(user.id);
+    setTimeout(() => {
+      setCopiedUserId(null);
+    }, 2000);
+  };
+
+  // Direct WhatsApp Share link
+  const handleOpenWhatsAppShare = (user: User) => {
+    const studentDet = studentDetails.find((d) => d.studentId === user.id);
+    const assignedClass = classes.find((c) =>
+      user.role === 'teacher' ? c.teacherId === user.id : c.id === studentDet?.classId
+    );
+    const msg = formatWhatsAppCredentials({
+      fullName: user.fullName,
+      role: user.role,
+      username: user.username || user.email.split('@')[0],
+      password: user.tempPassword,
+      email: user.email,
+      className: assignedClass?.name,
+      schoolName: schoolInfo.name || 'ACEBEE Academy',
+    });
+    const phone = (studentDet?.parentPhone || user.phoneNumber || '').replace(/[^0-9]/g, '');
+    const url = phone
+      ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
+
   // Filtered users list
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
       u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.username && u.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (u.phoneNumber && u.phoneNumber.includes(searchTerm));
 
@@ -118,6 +173,8 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
     setEditingUser(user);
     setEditFullName(user.fullName);
     setEditEmail(user.email);
+    setEditUsername(user.username || '');
+    setEditPassword(user.tempPassword || '');
     setEditRole(user.role);
     setEditPhone(user.phoneNumber || '');
 
@@ -164,7 +221,9 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
       editingUser.id,
       {
         fullName: editFullName.trim(),
-        email: editEmail.trim(),
+        email: editEmail.trim() || `${(editUsername || 'user').toLowerCase()}@acebee.edu`,
+        username: editUsername.trim() || undefined,
+        tempPassword: editPassword.trim() || undefined,
         role: editRole,
         phoneNumber: editPhone.trim(),
       },
@@ -430,9 +489,9 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
               </th>
               <th className="py-3 px-4">User</th>
               <th className="py-3 px-4">Role</th>
-              <th className="py-3 px-4">Email</th>
-              <th className="py-3 px-4">Phone</th>
+              <th className="py-3 px-4">Login Username & Password</th>
               <th className="py-3 px-4">Class / Details</th>
+              <th className="py-3 px-4">WhatsApp Share</th>
               <th className="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
@@ -456,6 +515,7 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
                 const assignedClass = classes.find((c) =>
                   u.role === 'teacher' ? c.teacherId === u.id : c.id === studentDet?.classId
                 );
+                const isCopied = copiedUserId === u.id;
 
                 return (
                   <tr
@@ -480,17 +540,18 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
                     </td>
 
                     {/* User Profile */}
-                    <td className="py-3 px-4 flex items-center gap-3">
-                      <UserAvatar
-                        name={u.fullName}
-                        avatarUrl={u.avatarUrl}
-                        role={u.role}
-                        size="sm"
-                        className="w-8 h-8 rounded-lg"
-                      />
-                      <div className="min-w-0">
-                        <span className="font-bold text-slate-900 block truncate">{u.fullName}</span>
-                        <span className="block text-[10px] font-mono text-slate-400 truncate">{u.id}</span>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <UserAvatar
+                          name={u.fullName}
+                          role={u.role}
+                          size="sm"
+                          className="w-7 h-7 rounded-lg"
+                        />
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-900 block truncate">{u.fullName}</span>
+                          <span className="block text-[10px] text-slate-500 truncate">{u.phoneNumber || u.email}</span>
+                        </div>
                       </div>
                     </td>
 
@@ -511,11 +572,18 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
                       </span>
                     </td>
 
-                    {/* Email */}
-                    <td className="py-3 px-4 font-mono text-slate-700">{u.email}</td>
-
-                    {/* Phone */}
-                    <td className="py-3 px-4 text-slate-600">{u.phoneNumber || '-'}</td>
+                    {/* Login Credentials (Auto-generated) */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                        <span className="bg-slate-100 px-1.5 py-0.5 rounded font-semibold text-blue-900">
+                          {u.username || u.email.split('@')[0]}
+                        </span>
+                        <span className="text-slate-300">/</span>
+                        <span className="bg-amber-50 text-amber-900 border border-amber-200 px-1.5 py-0.5 rounded font-mono text-[10px]">
+                          {u.tempPassword || 'AutoPass@1'}
+                        </span>
+                      </div>
+                    </td>
 
                     {/* Class / Details */}
                     <td className="py-3 px-4">
@@ -531,6 +599,44 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
                           Parent: {studentDet.parentName}
                         </span>
                       )}
+                    </td>
+
+                    {/* WhatsApp 1-Click Share & Copy */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyWhatsApp(u)}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1 shadow-2xs ${
+                            isCopied
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          }`}
+                          title="Copy login details formatted for WhatsApp message"
+                          id={`copy-wa-btn-${u.id}`}
+                        >
+                          {isCopied ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy WhatsApp</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenWhatsAppShare(u)}
+                          className="p-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors"
+                          title="Open in WhatsApp Web"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
 
                     {/* Actions */}
@@ -574,7 +680,7 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-900 text-base font-['Plus_Jakarta_Sans',sans-serif]">
-                    Edit Account Profile
+                    Edit Account Profile & Credentials
                   </h4>
                   <p className="text-xs text-slate-500">
                     Modifying {editingUser.fullName} ({editingUser.id})
@@ -595,6 +701,26 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
                 <span>{editSuccessMsg}</span>
               </div>
             )}
+
+            {/* Quick 1-Click WhatsApp Copy from Edit Modal */}
+            <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="font-bold text-xs text-emerald-950 block">
+                  Quick WhatsApp Credential Copy
+                </span>
+                <span className="text-[11px] text-emerald-700 block">
+                  Username: <strong className="font-mono">{editUsername || editingUser.username}</strong> | Password: <strong className="font-mono">{editPassword || editingUser.tempPassword}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCopyWhatsApp(editingUser)}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors shadow-xs shrink-0"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copy for WhatsApp</span>
+              </button>
+            </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -630,16 +756,45 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
                 </div>
               </div>
 
+              {/* Login Username & Password */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Login Username
+                  </label>
+                  <input
+                    type="text"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    placeholder="e.g. stu_alexander"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Login Password
+                  </label>
+                  <input
+                    type="text"
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    placeholder="e.g. Stu@9482"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 bg-white"
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Email Address *
+                    Email Address <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="email"
-                    required
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="Optional email address"
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                     id="edit-email-input"
                   />
@@ -720,7 +875,7 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
 
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        Parent Email
+                        Parent Email <span className="text-slate-400 font-normal">(Optional)</span>
                       </label>
                       <input
                         type="email"

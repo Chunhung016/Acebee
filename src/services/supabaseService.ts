@@ -17,15 +17,23 @@ export interface SupabaseSyncState {
 }
 
 // Convert profiles table row to User
-export const mapProfileToUser = (row: any): User => ({
-  id: row.id,
-  email: row.email,
-  fullName: row.full_name || row.fullName || 'User',
-  role: row.role || 'student',
-  phoneNumber: row.phone_number || row.phoneNumber || '',
-  avatarUrl: row.avatar_url || row.avatarUrl,
-  createdAt: row.created_at || new Date().toISOString(),
-});
+export const mapProfileToUser = (row: any): User => {
+  // Completely eliminate preset stock avatar URLs
+  const rawAvatar = row.avatar_url || row.avatarUrl;
+  const isCustomUpload = Boolean(rawAvatar && (rawAvatar.startsWith('data:image') || rawAvatar.startsWith('blob:')));
+
+  return {
+    id: row.id,
+    email: row.email || `${row.username || row.id}@acebee.local`,
+    username: row.username || row.email?.split('@')[0] || `user_${row.id?.slice(-4)}`,
+    tempPassword: row.temp_password || row.tempPassword || row.password,
+    fullName: row.full_name || row.fullName || 'User',
+    role: row.role || 'student',
+    phoneNumber: row.phone_number || row.phoneNumber || '',
+    avatarUrl: isCustomUpload ? rawAvatar : undefined,
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+};
 
 // Convert classes table row to SchoolClass
 export const mapClassToSchoolClass = (row: any): SchoolClass => ({
@@ -285,6 +293,8 @@ export const persistProfileToSupabase = async (user: User) => {
     await supabase.from('profiles').upsert({
       id: user.id,
       email: user.email,
+      username: user.username,
+      temp_password: user.tempPassword,
       full_name: user.fullName,
       role: user.role,
       phone_number: user.phoneNumber,

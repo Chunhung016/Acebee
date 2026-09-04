@@ -22,6 +22,7 @@ import {
   INITIAL_TEACHER_COMMENTS,
   INITIAL_SCHOOL_INFO,
 } from '../data/initialData';
+import { generateUsername, generatePassword } from '../utils/credentialGenerator';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   fetchAllSupabaseData,
@@ -81,20 +82,21 @@ interface AppContextType {
   switchUser: (userId: string) => void;
 
   // Admin Operations
-  createAccount: (userData: Omit<User, 'id' | 'createdAt'>, extraDetails?: Partial<StudentDetail>) => User;
+  createAccount: (userData: Partial<User> & { fullName: string; role: UserRole }, extraDetails?: Partial<StudentDetail>) => User;
   updateAccount: (userId: string, data: Partial<Omit<User, 'id'>>, extraDetails?: Partial<StudentDetail>) => void;
   deleteAccount: (userId: string) => void;
   bulkDeleteAccounts: (userIds: string[]) => void;
   bulkUpdateAccounts: (userIds: string[], updates: { role?: UserRole; classId?: string; phoneNumber?: string }) => void;
   bulkCreateAccounts: (accounts: Array<{
     fullName: string;
-    email: string;
+    email?: string;
+    username?: string;
     role: UserRole;
     phoneNumber?: string;
     parentName?: string;
     parentPhone?: string;
     address?: string;
-  }>) => { createdCount: number; errors: string[] };
+  }>) => { createdCount: number; errors: string[]; createdUsers: User[] };
   bindStudentToClass: (studentId: string, classId: string) => void;
   assignTeacherToClass: (classId: string, teacherId: string) => void;
   createClass: (name: string, gradeLevel: string, teacherId: string) => SchoolClass;
@@ -135,6 +137,31 @@ const STORAGE_KEYS = {
   SCHOOL_INFO: 'acebee_school_info_v2',
 };
 
+const cleanUserRecord = (u: any): User => {
+  const rawAvatar = u.avatarUrl || u.avatar_url;
+  const isCustomUpload = Boolean(
+    rawAvatar && typeof rawAvatar === 'string' && (rawAvatar.startsWith('data:image') || rawAvatar.startsWith('blob:'))
+  );
+
+  const fallbackUsername = u.fullName
+    ? u.fullName.toLowerCase().replace(/[^a-z0-9]/g, '')
+    : `user_${u.id?.slice(-4) || '1'}`;
+  const cleanUsername = (
+    u.username ||
+    (u.email && !u.email.endsWith('@acebee.local') ? u.email.split('@')[0] : fallbackUsername)
+  ).toLowerCase();
+  const cleanEmail = u.email || `${cleanUsername}@acebee.local`;
+  const cleanPassword = u.tempPassword || u.temp_password || u.password || 'Ace@2026';
+
+  return {
+    ...u,
+    email: cleanEmail,
+    username: cleanUsername,
+    tempPassword: cleanPassword,
+    avatarUrl: isCustomUpload ? rawAvatar : undefined,
+  };
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load state from localStorage or fallback to initial data
   const [schoolInfo, setSchoolInfo] = useState<SchoolInfo>(() => {
@@ -144,7 +171,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.USERS);
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
+    const raw: User[] = saved ? JSON.parse(saved) : INITIAL_USERS;
+    return raw.map(cleanUserRecord);
   });
 
   const [classes, setClasses] = useState<SchoolClass[]>(() => {
@@ -181,7 +209,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return cleanUserRecord(JSON.parse(saved));
       } catch {
         return null;
       }
@@ -205,7 +233,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const data = await fetchAllSupabaseData();
       if (data) {
-        if (data.users && data.users.length > 0) setUsers(data.users);
+        if (data.users && data.users.length > 0) setUsers(data.users.map(cleanUserRecord));
         if (data.classes && data.classes.length > 0) setClasses(data.classes);
         if (data.studentDetails && data.studentDetails.length > 0) setStudentDetails(data.studentDetails);
         if (data.quizzes && data.quizzes.length > 0) setQuizzes(data.quizzes);
@@ -300,32 +328,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser]);
 
   // Auth Functions
-  const login = (email: string, pass: string): { success: boolean; message?: string } => {
-    const normalizedEmail = email.trim().toLowerCase();
+  const login = (emailOrUsername: string, pass: string): { success: boolean; message?: string } => {
+    const query = emailOrUsername.trim().toLowerCase();
+    if (!query) {
+      return { success: false, message: 'Please enter your login username or email.' };
+    }
     
     // Check pre-seeded admin requirement
-    if (normalizedEmail === 'admin@lb.com') {
+    if (query === 'admin@lb.com' || query === 'admin' || query === 'eleanor') {
       if (pass !== '212832Lb') {
         return { success: false, message: 'Invalid admin credentials. Please check your password and try again.' };
       }
-      const adminUser = users.find((u) => u.email.toLowerCase() === 'admin@lb.com') || INITIAL_USERS[0];
-      setCurrentUser(adminUser);
+      const adminUser =
+        users.find((u) => u.email.toLowerCase() === 'admin@lb.com' || u.username?.toLowerCase() === 'admin') ||
+        INITIAL_USERS[0];
+      setCurrentUser(cleanUserRecord(adminUser));
       setCurrentView('dashboard');
       setIsLoginModalOpen(false);
       return { success: true };
     }
 
-    // For other accounts, check user list
-    const foundUser = users.find((u) => u.email.toLowerCase() === normalizedEmail);
+    // For other accounts, check user list by Username OR Email
+    const foundUser = users.find(
+      (u) =>
+        u.username?.toLowerCase() === query ||
+        u.email.toLowerCase() === query ||
+        u.email.toLowerCase().split('@')[0] === query
+    );
+
     if (!foundUser) {
       return {
         success: false,
-        message: 'Account not found. There is no public registration; all accounts must be created by the Administrator.',
+        message:
+          'Account not found. Please verify your Login Username or Email. All user credentials are provided by the School Administrator.',
       };
     }
 
-    // In demo mode, accept any password or matching preset
-    setCurrentUser(foundUser);
+    // Accept user's temporary password, demo passwords, or matching credential
+    if (foundUser.tempPassword && foundUser.tempPassword !== pass && pass !== 'demo123' && pass !== '212832Lb') {
+      return {
+        success: false,
+        message: 'Incorrect password. Please verify the login credentials provided by the Administrator.',
+      };
+    }
+
+    setCurrentUser(cleanUserRecord(foundUser));
     setCurrentView('dashboard');
     setIsLoginModalOpen(false);
     return { success: true };
@@ -340,7 +387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const switchUser = (userId: string) => {
     const targetUser = users.find((u) => u.id === userId);
     if (targetUser) {
-      setCurrentUser(targetUser);
+      setCurrentUser(cleanUserRecord(targetUser));
       setCurrentView('dashboard');
       setSelectedQuizForTaking(null);
     }
@@ -348,13 +395,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Admin Functions
   const createAccount = (
-    userData: Omit<User, 'id' | 'createdAt'>,
+    userData: Partial<User> & { fullName: string; role: UserRole },
     extraDetails?: Partial<StudentDetail>
   ): User => {
     const newId = `user-${userData.role}-${Date.now().toString(36)}`;
+    const generatedUsername = generateUsername(userData.fullName, userData.role, users);
+    const generatedPassword = userData.tempPassword || generatePassword(userData.role);
+    const finalUsername = (userData.username?.trim() || generatedUsername).toLowerCase();
+    const finalEmail = userData.email?.trim() || `${finalUsername}@acebee.local`;
+
     const newUser: User = {
-      ...userData,
       id: newId,
+      fullName: userData.fullName.trim(),
+      role: userData.role,
+      username: finalUsername,
+      tempPassword: generatedPassword,
+      email: finalEmail,
+      phoneNumber: userData.phoneNumber?.trim() || '',
+      avatarUrl:
+        userData.avatarUrl && userData.avatarUrl.startsWith('data:image') ? userData.avatarUrl : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -369,7 +428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         classId: extraDetails?.classId || (classes[0]?.id ?? 'class-5a'),
         parentId: extraDetails?.parentId || '',
         parentName: extraDetails?.parentName || 'Parent / Guardian',
-        parentPhone: extraDetails?.parentPhone || '+1 (555) 000-0000',
+        parentPhone: extraDetails?.parentPhone || userData.phoneNumber || '+1 (555) 000-0000',
         parentEmail: extraDetails?.parentEmail || '',
         address: extraDetails?.address || '123 Academic Way, Springfield, OR',
         emergencyContact: extraDetails?.emergencyContact || '',
@@ -392,7 +451,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUsers((prev) =>
       prev.map((user) => {
         if (user.id === userId) {
-          const updated = { ...user, ...data };
+          const updated = cleanUserRecord({ ...user, ...data });
           updatedUserRecord = updated;
           persistProfileToSupabase(updated);
           return updated;
@@ -478,11 +537,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUsers((prev) =>
         prev.map((user) => {
           if (idSet.has(user.id)) {
-            const updated = {
+            const updated = cleanUserRecord({
               ...user,
               ...(updates.role ? { role: updates.role } : {}),
               ...(updates.phoneNumber ? { phoneNumber: updates.phoneNumber } : {}),
-            };
+            });
             persistProfileToSupabase(updated);
             return updated;
           }
@@ -508,52 +567,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const bulkCreateAccounts = (
     accounts: Array<{
       fullName: string;
-      email: string;
+      email?: string;
+      username?: string;
       role: UserRole;
       phoneNumber?: string;
       parentName?: string;
       parentPhone?: string;
       address?: string;
     }>
-  ) => {
+  ): { createdCount: number; errors: string[]; createdUsers: User[] } => {
     const newUsersList: User[] = [];
     const newStudentDetailsList: StudentDetail[] = [];
     const errors: string[] = [];
 
-    const existingEmails = new Set(users.map((u) => u.email.toLowerCase()));
+    const allKnownUsers = [...users];
 
     accounts.forEach((acc, idx) => {
-      const emailLower = acc.email.trim().toLowerCase();
-      if (!acc.fullName || !acc.email) {
-        errors.push(`Row ${idx + 1}: Name and email are required.`);
+      if (!acc.fullName || !acc.fullName.trim()) {
+        errors.push(`Row ${idx + 1}: Name is required.`);
         return;
       }
-      if (existingEmails.has(emailLower)) {
-        errors.push(`Row ${idx + 1}: Email ${acc.email} already exists.`);
-        return;
-      }
-      existingEmails.add(emailLower);
 
-      const userId = `user-${acc.role}-${Date.now().toString(36)}-${idx}`;
+      const role = acc.role || 'student';
+      const generatedUName = generateUsername(acc.fullName, role, [...allKnownUsers, ...newUsersList]);
+      const generatedPass = generatePassword(role);
+      const finalUsername = (acc.username?.trim() || generatedUName).toLowerCase();
+      const finalEmail = acc.email?.trim() || `${finalUsername}@acebee.local`;
+
+      const userId = `user-${role}-${Date.now().toString(36)}-${idx}`;
       const newUser: User = {
         id: userId,
-        email: acc.email.trim(),
         fullName: acc.fullName.trim(),
-        role: acc.role,
-        phoneNumber: acc.phoneNumber || '+1 (555) 000-0000',
+        role: role,
+        username: finalUsername,
+        tempPassword: generatedPass,
+        email: finalEmail,
+        phoneNumber: acc.phoneNumber || '',
         createdAt: new Date().toISOString(),
       };
+
       newUsersList.push(newUser);
       persistProfileToSupabase(newUser);
 
-      if (acc.role === 'student') {
+      if (role === 'student') {
         const newDetail: StudentDetail = {
           id: `detail-${userId}`,
           studentId: userId,
           classId: classes[0]?.id ?? 'class-5a',
           parentId: '',
           parentName: acc.parentName || 'Parent / Guardian',
-          parentPhone: acc.parentPhone || '+1 (555) 000-0000',
+          parentPhone: acc.parentPhone || acc.phoneNumber || '+1 (555) 000-0000',
           address: acc.address || 'Address pending verification',
           createdAt: new Date().toISOString(),
         };
@@ -569,7 +632,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    return { createdCount: newUsersList.length, errors };
+    return { createdCount: newUsersList.length, errors, createdUsers: newUsersList };
   };
 
   const bindStudentToClass = (studentId: string, classId: string) => {

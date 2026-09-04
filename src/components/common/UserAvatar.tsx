@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { User as UserIcon } from 'lucide-react';
 import { UserRole } from '../../types';
 
@@ -12,14 +12,11 @@ interface UserAvatarProps {
 
 export const UserAvatar: React.FC<UserAvatarProps> = ({
   name = 'User',
-  avatarUrl,
   role,
   size = 'md',
   className = '',
 }) => {
-  const [imgError, setImgError] = useState(false);
-
-  // Extract initials
+  // Extract initials for clean visual typography
   const getInitials = (fullName: string) => {
     if (!fullName) return 'U';
     const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -31,15 +28,15 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   const getRoleColors = (userRole?: string) => {
     switch (userRole?.toLowerCase()) {
       case 'admin':
-        return 'bg-purple-700 text-purple-100 border-purple-800';
+        return 'bg-purple-900 text-purple-100 border-purple-800';
       case 'teacher':
-        return 'bg-emerald-700 text-emerald-100 border-emerald-800';
+        return 'bg-emerald-900 text-emerald-100 border-emerald-800';
       case 'student':
-        return 'bg-blue-700 text-blue-100 border-blue-800';
+        return 'bg-blue-900 text-blue-100 border-blue-800';
       case 'parent':
-        return 'bg-amber-700 text-amber-100 border-amber-800';
+        return 'bg-slate-800 text-slate-100 border-slate-700';
       default:
-        return 'bg-slate-700 text-slate-100 border-slate-800';
+        return 'bg-slate-800 text-slate-100 border-slate-700';
     }
   };
 
@@ -58,20 +55,6 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
     lg: 'w-6 h-6',
     xl: 'w-8 h-8',
   };
-
-  const hasValidImage = Boolean(avatarUrl && avatarUrl.trim().length > 0 && !imgError);
-
-  if (hasValidImage) {
-    return (
-      <img
-        src={avatarUrl!}
-        alt={name}
-        onError={() => setImgError(true)}
-        className={`${sizeClasses[size]} object-cover border border-slate-200 shrink-0 ${className}`}
-        referrerPolicy="no-referrer"
-      />
-    );
-  }
 
   const initials = getInitials(name);
 
