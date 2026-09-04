@@ -19,18 +19,21 @@ export const LoginModal: React.FC = () => {
 
   if (!isLoginModalOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setIsLoading(true);
 
-    setTimeout(() => {
-      const res = login(identifier, password);
-      setIsLoading(false);
+    try {
+      const res = await login(identifier, password);
       if (!res.success) {
         setErrorMsg(res.message || 'Login failed. Please verify your credentials.');
       }
-    }, 150);
+    } catch (err) {
+      setErrorMsg('Login failed. Please verify your network and credentials.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

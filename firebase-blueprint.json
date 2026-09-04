@@ -1,0 +1,171 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with login credentials, roles, and basic info",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "username": { "type": "string" },
+        "tempPassword": { "type": "string" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "teacher", "student", "parent"] },
+        "phoneNumber": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "fullName", "role", "createdAt"]
+    },
+    "SchoolClass": {
+      "title": "SchoolClass",
+      "description": "Classroom entity managed by teachers and administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "gradeLevel": { "type": "string" },
+        "academicYear": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "gradeLevel", "academicYear", "createdAt"]
+    },
+    "StudentDetail": {
+      "title": "StudentDetail",
+      "description": "Student roster enrollment details and linked parent contact info",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "classId": { "type": "string" },
+        "parentId": { "type": "string" },
+        "parentName": { "type": "string" },
+        "parentPhone": { "type": "string" },
+        "parentEmail": { "type": "string" },
+        "address": { "type": "string" },
+        "emergencyContact": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "studentId", "classId", "parentName", "parentPhone", "address", "createdAt"]
+    },
+    "Quiz": {
+      "title": "Quiz",
+      "description": "Subject quizzes published by teachers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "description": { "type": "string" },
+        "timeLimitMinutes": { "type": "number" },
+        "questions": { "type": "array" },
+        "dueDate": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "classId", "title", "subject", "questions", "dueDate", "createdAt"]
+    },
+    "QuizResult": {
+      "title": "QuizResult",
+      "description": "Completed quiz submissions and graded answers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "quizId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "score": { "type": "number" },
+        "totalPoints": { "type": "number" },
+        "percentage": { "type": "number" },
+        "answers": { "type": "array" },
+        "completedAt": { "type": "string" }
+      },
+      "required": ["id", "quizId", "studentId", "score", "totalPoints", "completedAt"]
+    },
+    "TeacherComment": {
+      "title": "TeacherComment",
+      "description": "Behavioral evaluations and remarks sent by teachers to students/parents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "parentId": { "type": "string" },
+        "category": { "type": "string" },
+        "comment": { "type": "string" },
+        "date": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "teacherId", "studentId", "category", "comment", "createdAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "School-wide bulletin board announcements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "badge": { "type": "string" },
+        "pinned": { "type": "boolean" },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "category", "content", "authorId", "createdAt"]
+    },
+    "SchoolInfo": {
+      "title": "SchoolInfo",
+      "description": "Institutional settings and branding info",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "schoolNumber": { "type": "string" },
+        "address": { "type": "string" },
+        "email": { "type": "string" },
+        "principalName": { "type": "string" },
+        "website": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "schoolNumber", "address", "email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles collection containing all student, teacher, admin, and parent accounts"
+    },
+    "/classes/{classId}": {
+      "schema": { "$ref": "#/entities/SchoolClass" },
+      "description": "Classrooms collection"
+    },
+    "/student_details/{detailId}": {
+      "schema": { "$ref": "#/entities/StudentDetail" },
+      "description": "Student roster and parent relationship records"
+    },
+    "/quizzes/{quizId}": {
+      "schema": { "$ref": "#/entities/Quiz" },
+      "description": "Subject quizzes created by teachers"
+    },
+    "/quiz_results/{resultId}": {
+      "schema": { "$ref": "#/entities/QuizResult" },
+      "description": "Student quiz results and graded answers"
+    },
+    "/teacher_comments/{commentId}": {
+      "schema": { "$ref": "#/entities/TeacherComment" },
+      "description": "Teacher behavioral feedback comments"
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "School bulletins and announcements"
+    },
+    "/school_info/{infoId}": {
+      "schema": { "$ref": "#/entities/SchoolInfo" },
+      "description": "Institutional metadata and configurations"
+    }
+  }
+}

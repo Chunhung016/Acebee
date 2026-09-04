@@ -1,6 +1,6 @@
 {
   "name": "Acebee - School Management Platform",
-  "description": "Role-based educational portal for Acebee School featuring Admin, Teacher, Student, and Parent dashboards, dynamic public announcement board, interactive quizzes, student behavior tracking, and complete Supabase relational SQL schema.",
+  "description": "Role-based educational portal for Acebee School featuring Admin, Teacher, Student, and Parent dashboards, dynamic public announcement board, interactive quizzes, student behavior tracking, and Cloud Firestore real-time database synchronization.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
