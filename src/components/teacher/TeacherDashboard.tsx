@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Subject, CommentCategory, QuizQuestion, StudentDetail } from '../../types';
 import { UserAvatar } from '../common/UserAvatar';
@@ -20,6 +20,7 @@ import {
   Calendar,
   Send,
   HelpCircle,
+  Layers,
 } from 'lucide-react';
 
 export const TeacherDashboard: React.FC = () => {
@@ -40,9 +41,23 @@ export const TeacherDashboard: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'roster' | 'quizzes' | 'behavior' | 'gradebook'>('roster');
 
-  // Find teacher's assigned class
-  const teacherClass = classes.find((c) => c.teacherId === currentUser?.id) || classes[0];
-  const assignedStudentDetails = studentDetails.filter((d) => d.classId === teacherClass?.id);
+  // Find all classes assigned to this teacher
+  const teacherClasses = classes.filter((c) => c.teacherId === currentUser?.id);
+  const availableClasses = teacherClasses.length > 0 ? teacherClasses : classes;
+
+  const [selectedClassId, setSelectedClassId] = useState<string>(() => {
+    return teacherClasses[0]?.id || classes[0]?.id || '';
+  });
+
+  // Ensure selectedClassId stays valid if classes list changes
+  useEffect(() => {
+    if (availableClasses.length > 0 && !availableClasses.some((c) => c.id === selectedClassId)) {
+      setSelectedClassId(availableClasses[0].id);
+    }
+  }, [availableClasses, selectedClassId]);
+
+  const currentClass = classes.find((c) => c.id === selectedClassId) || availableClasses[0] || classes[0];
+  const assignedStudentDetails = studentDetails.filter((d) => d.classId === currentClass?.id);
 
   // Editing Student Detail State
   const [editingStudentDetail, setEditingStudentDetail] = useState<StudentDetail | null>(null);
@@ -51,6 +66,7 @@ export const TeacherDashboard: React.FC = () => {
   // New Quiz Builder State
   const [quizTitle, setQuizTitle] = useState('');
   const [quizSubject, setQuizSubject] = useState<Subject>('Mathematics');
+  const [quizClassId, setQuizClassId] = useState<string>(currentClass?.id || '');
   const [quizDescription, setQuizDescription] = useState('');
   const [quizTimeLimit, setQuizTimeLimit] = useState(15);
   const [quizDueDate, setQuizDueDate] = useState('2026-03-30');
@@ -65,10 +81,28 @@ export const TeacherDashboard: React.FC = () => {
   ]);
   const [quizSuccessMsg, setQuizSuccessMsg] = useState<string | null>(null);
 
+  // Sync quizClassId with currentClass when currentClass changes and quizClassId is not set
+  useEffect(() => {
+    if (currentClass?.id && !quizClassId) {
+      setQuizClassId(currentClass.id);
+    }
+  }, [currentClass, quizClassId]);
+
   // Behavioral Comment State
   const [selectedStudentId, setSelectedStudentId] = useState(
     assignedStudentDetails[0]?.studentId || ''
   );
+
+  useEffect(() => {
+    if (assignedStudentDetails.length > 0) {
+      if (!assignedStudentDetails.some((d) => d.studentId === selectedStudentId)) {
+        setSelectedStudentId(assignedStudentDetails[0].studentId);
+      }
+    } else {
+      setSelectedStudentId('');
+    }
+  }, [assignedStudentDetails, selectedStudentId]);
+
   const [commentCategory, setCommentCategory] = useState<CommentCategory>('positive');
   const [commentText, setCommentText] = useState('');
   const [commentSuccessMsg, setCommentSuccessMsg] = useState<string | null>(null);
@@ -123,7 +157,10 @@ export const TeacherDashboard: React.FC = () => {
   // Handle Create Quiz Submit
   const handleCreateQuizSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!teacherClass) return;
+    const targetClassId = quizClassId || currentClass?.id;
+    if (!targetClassId) return;
+
+    const targetClassObj = classes.find((c) => c.id === targetClassId);
 
     // Filter valid questions
     const validQuestions = questions.filter((q) => q.question.trim().length > 0);
@@ -133,7 +170,7 @@ export const TeacherDashboard: React.FC = () => {
     }
 
     createQuiz({
-      classId: teacherClass.id,
+      classId: targetClassId,
       title: quizTitle,
       subject: quizSubject,
       description: quizDescription,
@@ -142,7 +179,7 @@ export const TeacherDashboard: React.FC = () => {
       questions: validQuestions,
     });
 
-    setQuizSuccessMsg(`Quiz "${quizTitle}" published for ${teacherClass.name}!`);
+    setQuizSuccessMsg(`Quiz "${quizTitle}" published for ${targetClassObj?.name || 'Class'}!`);
     setQuizTitle('');
     setQuizDescription('');
     setQuestions([
@@ -175,9 +212,12 @@ export const TeacherDashboard: React.FC = () => {
     setCommentText('');
   };
 
-  // Teacher Quizzes
+  // Teacher Quizzes - matches teacher authored or any of teacher's assigned classes
   const teacherQuizzes = quizzes.filter(
-    (q) => q.teacherId === currentUser?.id || q.classId === teacherClass?.id
+    (q) =>
+      q.teacherId === currentUser?.id ||
+      teacherClasses.some((c) => c.id === q.classId) ||
+      q.classId === currentClass?.id
   );
 
   // Teacher Comments history
@@ -222,9 +262,17 @@ export const TeacherDashboard: React.FC = () => {
             <h1 className="text-2xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] tracking-tight">
               Welcome, {currentUser?.fullName}
             </h1>
-            <p className="text-xs text-blue-200 mt-0.5 leading-relaxed">
-              Homeroom Class: <strong className="text-white">{teacherClass?.name || 'Assigned Class'}</strong> ({teacherClass?.gradeLevel}) • {assignedStudentDetails.length} Enrolled Students
-            </p>
+            <div className="text-xs text-blue-200 mt-1 flex flex-wrap items-center gap-2">
+              <span>
+                {teacherClasses.length > 1 ? (
+                  <>Carrying <strong className="text-white">{teacherClasses.length} Assigned Classes:</strong> {teacherClasses.map(c => c.name).join(', ')}</>
+                ) : (
+                  <>Homeroom Class: <strong className="text-white">{currentClass?.name || 'Assigned Class'}</strong> ({currentClass?.gradeLevel})</>
+                )}
+              </span>
+              <span>•</span>
+              <span><strong>{assignedStudentDetails.length}</strong> Students in active view ({currentClass?.name})</span>
+            </div>
           </div>
         </div>
 
@@ -235,6 +283,54 @@ export const TeacherDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Classroom Switcher Bar (When teacher carries 2 or more classes or chooses between classes) */}
+      {availableClasses.length > 1 && (
+        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-blue-700" />
+            <span className="text-xs font-bold text-slate-900">
+              Active Classroom View:
+            </span>
+            <span className="text-[11px] text-slate-500">
+              (Select classroom to inspect roster & gradebook)
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {availableClasses.map((cls) => {
+              const count = studentDetails.filter((d) => d.classId === cls.id).length;
+              const isSelected = cls.id === currentClass?.id;
+              return (
+                <button
+                  key={cls.id}
+                  onClick={() => {
+                    setSelectedClassId(cls.id);
+                    setQuizClassId(cls.id);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 ${
+                    isSelected
+                      ? 'bg-blue-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
+                  }`}
+                  id={`teacher-switch-class-${cls.id}`}
+                >
+                  <span>{cls.name}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      isSelected
+                        ? 'bg-blue-800 text-blue-100'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Nav Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
@@ -248,7 +344,7 @@ export const TeacherDashboard: React.FC = () => {
           id="teacher-tab-roster"
         >
           <Users className="w-4 h-4" />
-          Class Roster & Student Profiles ({assignedStudentDetails.length})
+          Class Roster ({currentClass?.name || 'Class'}) ({assignedStudentDetails.length})
         </button>
 
         <button
@@ -287,7 +383,7 @@ export const TeacherDashboard: React.FC = () => {
           id="teacher-tab-gradebook"
         >
           <Award className="w-4 h-4" />
-          Class Submissions & Gradebook
+          Class Submissions & Gradebook ({currentClass?.name || 'Class'})
         </button>
       </div>
 
@@ -300,7 +396,7 @@ export const TeacherDashboard: React.FC = () => {
                 <span className="w-1.5 h-5 bg-blue-600 rounded-full shrink-0" />
                 <div>
                   <h3 className="font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] text-base">
-                    Class Roster: {teacherClass?.name}
+                    Class Roster: {currentClass?.name}
                   </h3>
                   <p className="text-xs text-slate-500">
                     Manage student profiles, emergency contacts, and linked parent details
@@ -516,7 +612,7 @@ export const TeacherDashboard: React.FC = () => {
                   Create Subject Quiz
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Assign a timed quiz to your class ({teacherClass?.name})
+                  Assign a timed quiz to your students
                 </p>
               </div>
             </div>
@@ -529,6 +625,44 @@ export const TeacherDashboard: React.FC = () => {
             )}
 
             <form onSubmit={handleCreateQuizSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Target Classroom *
+                  </label>
+                  <select
+                    value={quizClassId}
+                    onChange={(e) => setQuizClassId(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-medium"
+                    id="teacher-quiz-class-select"
+                  >
+                    {availableClasses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.gradeLevel})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Subject *
+                  </label>
+                  <select
+                    value={quizSubject}
+                    onChange={(e) => setQuizSubject(e.target.value as Subject)}
+                    className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-medium"
+                    id="teacher-quiz-subject-select"
+                  >
+                    <option value="Mathematics">Mathematics</option>
+                    <option value="English">English</option>
+                    <option value="Science">Science</option>
+                    <option value="Social Studies">Social Studies</option>
+                    <option value="Art & Technology">Art & Technology</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Quiz Title *
@@ -544,28 +678,10 @@ export const TeacherDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Subject *
-                  </label>
-                  <select
-                    value={quizSubject}
-                    onChange={(e) => setQuizSubject(e.target.value as Subject)}
-                    className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
-                    id="teacher-quiz-subject-select"
-                  >
-                    <option value="Mathematics">Mathematics</option>
-                    <option value="English">English</option>
-                    <option value="Science">Science</option>
-                    <option value="Social Studies">Social Studies</option>
-                    <option value="Art & Technology">Art & Technology</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Time Limit (min)
+                    Time Limit (minutes)
                   </label>
                   <input
                     type="number"
@@ -573,7 +689,7 @@ export const TeacherDashboard: React.FC = () => {
                     max={60}
                     value={quizTimeLimit}
                     onChange={(e) => setQuizTimeLimit(Number(e.target.value))}
-                    className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs"
+                    className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs"
                   />
                 </div>
 
@@ -586,7 +702,7 @@ export const TeacherDashboard: React.FC = () => {
                     required
                     value={quizDueDate}
                     onChange={(e) => setQuizDueDate(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs"
+                    className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs"
                   />
                 </div>
               </div>
@@ -711,11 +827,14 @@ export const TeacherDashboard: React.FC = () => {
                   Active Quizzes ({teacherQuizzes.length})
                 </h3>
               </div>
-              <span className="text-xs text-slate-400">Class: {teacherClass?.name}</span>
+              <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
+                Viewing: {currentClass?.name || 'Class'}
+              </span>
             </div>
 
             <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
               {teacherQuizzes.map((quiz) => {
+                const targetCls = classes.find((c) => c.id === quiz.classId);
                 const resultsForQuiz = quizResults.filter((r) => r.quizId === quiz.id);
                 const avgScore =
                   resultsForQuiz.length > 0
@@ -731,11 +850,16 @@ export const TeacherDashboard: React.FC = () => {
                     className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-slate-50 transition-colors space-y-2"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
-                          {quiz.subject}
-                        </span>
-                        <h4 className="font-bold text-slate-900 text-sm mt-1">{quiz.title}</h4>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                            {quiz.subject}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                            {targetCls?.name || 'Assigned Class'}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-slate-900 text-sm">{quiz.title}</h4>
                       </div>
 
                       <button
@@ -863,7 +987,7 @@ export const TeacherDashboard: React.FC = () => {
                   Sent Behavioral Mentions Timeline ({teacherCommentsList.length})
                 </h3>
               </div>
-              <span className="text-xs text-slate-400">Class: {teacherClass?.name}</span>
+              <span className="text-xs text-slate-400">Class: {currentClass?.name}</span>
             </div>
 
             <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
@@ -938,7 +1062,7 @@ export const TeacherDashboard: React.FC = () => {
                 Subject Mastery & Student Submissions
               </h3>
               <p className="text-xs text-slate-500">
-                Real-time grades across all 5 subjects for {teacherClass?.name}
+                Real-time grades across all 5 subjects for {currentClass?.name}
               </p>
             </div>
           </div>

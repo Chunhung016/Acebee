@@ -99,6 +99,7 @@ interface AppContextType {
   }>) => { createdCount: number; errors: string[]; createdUsers: User[] };
   bindStudentToClass: (studentId: string, classId: string) => void;
   assignTeacherToClass: (classId: string, teacherId: string) => void;
+  assignTeacherToClasses: (teacherId: string, classIds: string[]) => void;
   createClass: (name: string, gradeLevel: string, teacherId: string) => SchoolClass;
   updateClass: (classId: string, updates: Partial<SchoolClass>) => void;
   deleteClass: (classId: string) => void;
@@ -661,6 +662,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const assignTeacherToClasses = (teacherId: string, classIds: string[]) => {
+    const targetClassIdSet = new Set(classIds);
+    setClasses((prev) =>
+      prev.map((cls) => {
+        if (targetClassIdSet.has(cls.id)) {
+          if (cls.teacherId !== teacherId) {
+            const updated = { ...cls, teacherId };
+            persistClassToSupabase(updated);
+            return updated;
+          }
+          return cls;
+        } else if (cls.teacherId === teacherId) {
+          // Unassign if removed from teacher's list
+          const updated = { ...cls, teacherId: '' };
+          persistClassToSupabase(updated);
+          return updated;
+        }
+        return cls;
+      })
+    );
+  };
+
   const createClass = (name: string, gradeLevel: string, teacherId: string): SchoolClass => {
     const newClass: SchoolClass = {
       id: `class-${Date.now().toString(36)}`,
@@ -901,6 +924,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bulkCreateAccounts,
       bindStudentToClass,
       assignTeacherToClass,
+      assignTeacherToClasses,
       createClass,
       updateClass,
       deleteClass,

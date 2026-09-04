@@ -48,6 +48,7 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
     deleteAccount,
     bulkDeleteAccounts,
     bulkUpdateAccounts,
+    assignTeacherToClasses,
   } = useApp();
 
   // Search & Filter state
@@ -79,6 +80,7 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
   const [editRole, setEditRole] = useState<UserRole>('student');
   const [editPhone, setEditPhone] = useState('');
   const [editClassId, setEditClassId] = useState('');
+  const [editTeacherClassIds, setEditTeacherClassIds] = useState<string[]>([]);
   const [editParentName, setEditParentName] = useState('');
   const [editParentPhone, setEditParentPhone] = useState('');
   const [editParentEmail, setEditParentEmail] = useState('');
@@ -90,16 +92,16 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
   // 1-Click Copy to WhatsApp
   const handleCopyWhatsApp = (user: User) => {
     const studentDet = studentDetails.find((d) => d.studentId === user.id);
-    const assignedClass = classes.find((c) =>
-      user.role === 'teacher' ? c.teacherId === user.id : c.id === studentDet?.classId
-    );
+    const studentClass = classes.find((c) => c.id === studentDet?.classId);
+    const teacherClasses = classes.filter((c) => c.teacherId === user.id);
     const msg = formatWhatsAppCredentials({
       fullName: user.fullName,
       role: user.role,
       username: user.username || user.email.split('@')[0],
       password: user.tempPassword,
       email: user.email,
-      className: assignedClass?.name,
+      className: studentClass?.name,
+      classNames: user.role === 'teacher' ? teacherClasses.map((c) => c.name) : undefined,
       schoolName: schoolInfo.name || 'ACEBEE Academy',
     });
     navigator.clipboard.writeText(msg);
@@ -112,16 +114,16 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
   // Direct WhatsApp Share link
   const handleOpenWhatsAppShare = (user: User) => {
     const studentDet = studentDetails.find((d) => d.studentId === user.id);
-    const assignedClass = classes.find((c) =>
-      user.role === 'teacher' ? c.teacherId === user.id : c.id === studentDet?.classId
-    );
+    const studentClass = classes.find((c) => c.id === studentDet?.classId);
+    const teacherClasses = classes.filter((c) => c.teacherId === user.id);
     const msg = formatWhatsAppCredentials({
       fullName: user.fullName,
       role: user.role,
       username: user.username || user.email.split('@')[0],
       password: user.tempPassword,
       email: user.email,
-      className: assignedClass?.name,
+      className: studentClass?.name,
+      classNames: user.role === 'teacher' ? teacherClasses.map((c) => c.name) : undefined,
       schoolName: schoolInfo.name || 'ACEBEE Academy',
     });
     const phone = (studentDet?.parentPhone || user.phoneNumber || '').replace(/[^0-9]/g, '');
@@ -178,6 +180,13 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
     setEditRole(user.role);
     setEditPhone(user.phoneNumber || '');
 
+    if (user.role === 'teacher') {
+      const assigned = classes.filter((c) => c.teacherId === user.id).map((c) => c.id);
+      setEditTeacherClassIds(assigned);
+    } else {
+      setEditTeacherClassIds([]);
+    }
+
     const studentDet = studentDetails.find((d) => d.studentId === user.id);
     if (studentDet) {
       setEditClassId(studentDet.classId || (classes[0]?.id ?? ''));
@@ -229,6 +238,10 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
       },
       extraDetails
     );
+
+    if (editRole === 'teacher') {
+      assignTeacherToClasses(editingUser.id, editTeacherClassIds);
+    }
 
     setEditSuccessMsg(`Account for ${editFullName} successfully updated!`);
     setTimeout(() => {
@@ -512,9 +525,8 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
               filteredUsers.map((u) => {
                 const isSelected = selectedUserIds.includes(u.id);
                 const studentDet = studentDetails.find((d) => d.studentId === u.id);
-                const assignedClass = classes.find((c) =>
-                  u.role === 'teacher' ? c.teacherId === u.id : c.id === studentDet?.classId
-                );
+                const studentClass = classes.find((c) => c.id === studentDet?.classId);
+                const teacherClasses = classes.filter((c) => c.teacherId === u.id);
                 const isCopied = copiedUserId === u.id;
 
                 return (
@@ -587,9 +599,24 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
 
                     {/* Class / Details */}
                     <td className="py-3 px-4">
-                      {assignedClass ? (
+                      {u.role === 'teacher' ? (
+                        teacherClasses.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {teacherClasses.map((tc) => (
+                              <span
+                                key={tc.id}
+                                className="font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[11px]"
+                              >
+                                {tc.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic text-[11px]">No classes assigned</span>
+                        )
+                      ) : studentClass ? (
                         <span className="font-medium text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-                          {assignedClass.name}
+                          {studentClass.name}
                         </span>
                       ) : (
                         <span className="text-slate-400 italic text-[11px]">Unassigned</span>
@@ -912,6 +939,71 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
                       className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs bg-white"
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Teacher specific fields: multiple class assignments */}
+              {editRole === 'teacher' && (
+                <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-950 uppercase tracking-wide flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
+                      Assigned Classrooms & Teaching Load
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                      {editTeacherClassIds.length} {editTeacherClassIds.length === 1 ? 'Class Selected' : 'Classes Selected'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800/80">
+                    Check all classes this teacher carries. A teacher can be assigned to multiple classrooms (e.g. Year 1 and Year 2).
+                  </p>
+
+                  {classes.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">No classes configured yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
+                      {classes.map((cls) => {
+                        const isChecked = editTeacherClassIds.includes(cls.id);
+                        const otherTeacher =
+                          cls.teacherId && cls.teacherId !== editingUser.id
+                            ? users.find((u) => u.id === cls.teacherId)
+                            : null;
+
+                        return (
+                          <label
+                            key={cls.id}
+                            className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                              isChecked
+                                ? 'bg-emerald-100/90 border-emerald-400 text-emerald-950 font-semibold shadow-2xs'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setEditTeacherClassIds((prev) =>
+                                  prev.includes(cls.id)
+                                    ? prev.filter((id) => id !== cls.id)
+                                    : [...prev, cls.id]
+                                );
+                              }}
+                              className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <span className="block truncate font-bold text-xs">{cls.name}</span>
+                              <span className="block text-[10px] text-slate-500">{cls.gradeLevel}</span>
+                              {otherTeacher && !isChecked && (
+                                <span className="block text-[9px] text-amber-600 truncate mt-0.5 font-normal">
+                                  Currently: {otherTeacher.fullName}
+                                </span>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 

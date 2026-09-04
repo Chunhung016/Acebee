@@ -78,6 +78,7 @@ export interface WhatsAppCredentialPayload {
   password?: string;
   email?: string;
   className?: string;
+  classNames?: string[];
   schoolName?: string;
   portalUrl?: string;
 }
@@ -92,11 +93,23 @@ export const formatWhatsAppCredentials = ({
   password,
   email,
   className,
+  classNames,
   schoolName = 'ACEBEE Academy',
   portalUrl = window.location.origin,
 }: WhatsAppCredentialPayload): string => {
   const roleDisplay = role.toUpperCase();
-  const classLine = className ? `🏫 *Class:* ${className}\n` : '';
+  
+  let classLine = '';
+  if (classNames && classNames.length > 0) {
+    if (classNames.length === 1) {
+      classLine = `🏫 *Class:* ${classNames[0]}\n`;
+    } else {
+      classLine = `🏫 *Assigned Classes (${classNames.length}):* ${classNames.join(', ')}\n`;
+    }
+  } else if (className) {
+    classLine = `🏫 *Class:* ${className}\n`;
+  }
+
   const emailLine = email && !email.endsWith('@acebee.local') ? `📧 *Email:* ${email}\n` : '';
   const passwordLine = password ? `🔒 *Password:* ${password}\n` : '';
 
