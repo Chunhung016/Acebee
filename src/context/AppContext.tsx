@@ -32,6 +32,8 @@ import {
   deleteAnnouncementFromSupabase,
   persistClassToSupabase,
   persistProfileToSupabase,
+  deleteProfileFromSupabase,
+  deleteProfilesFromSupabase,
   persistStudentDetailToSupabase,
   persistQuizToSupabase,
   persistQuizResultToSupabase,
@@ -77,6 +79,10 @@ interface AppContextType {
 
   // Admin Operations
   createAccount: (userData: Omit<User, 'id' | 'createdAt'>, extraDetails?: Partial<StudentDetail>) => User;
+  updateAccount: (userId: string, data: Partial<Omit<User, 'id'>>, extraDetails?: Partial<StudentDetail>) => void;
+  deleteAccount: (userId: string) => void;
+  bulkDeleteAccounts: (userIds: string[]) => void;
+  bulkUpdateAccounts: (userIds: string[], updates: { role?: UserRole; classId?: string; phoneNumber?: string }) => void;
   bulkCreateAccounts: (accounts: Array<{
     fullName: string;
     email: string;
@@ -370,6 +376,128 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     return newUser;
+  };
+
+  const updateAccount = (
+    userId: string,
+    data: Partial<Omit<User, 'id'>>,
+    extraDetails?: Partial<StudentDetail>
+  ) => {
+    let updatedUserRecord: User | null = null;
+    setUsers((prev) =>
+      prev.map((user) => {
+        if (user.id === userId) {
+          const updated = { ...user, ...data };
+          updatedUserRecord = updated;
+          persistProfileToSupabase(updated);
+          return updated;
+        }
+        return user;
+      })
+    );
+
+    if (currentUser?.id === userId && updatedUserRecord) {
+      setCurrentUser(updatedUserRecord);
+    }
+
+    // Handle student detail update or creation if applicable
+    if (extraDetails || data.role === 'student') {
+      setStudentDetails((prev) => {
+        const existingIdx = prev.findIndex((d) => d.studentId === userId);
+        if (existingIdx >= 0) {
+          const updatedDetail = { ...prev[existingIdx], ...(extraDetails || {}) };
+          persistStudentDetailToSupabase(updatedDetail);
+          const updatedList = [...prev];
+          updatedList[existingIdx] = updatedDetail;
+          return updatedList;
+        } else if (data.role === 'student') {
+          const newDetail: StudentDetail = {
+            id: `detail-${userId}`,
+            studentId: userId,
+            classId: extraDetails?.classId || classes[0]?.id || 'class-5a',
+            parentId: extraDetails?.parentId || `parent-${userId}`,
+            parentName: extraDetails?.parentName || 'Parent / Guardian',
+            parentPhone: extraDetails?.parentPhone || '+1 (555) 000-0000',
+            parentEmail: extraDetails?.parentEmail || '',
+            address: extraDetails?.address || '123 Academic Way',
+            createdAt: new Date().toISOString(),
+          };
+          persistStudentDetailToSupabase(newDetail);
+          return [newDetail, ...prev];
+        }
+        return prev;
+      });
+    }
+  };
+
+  const deleteAccount = (userId: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== userId));
+    setStudentDetails((prev) => prev.filter((d) => d.studentId !== userId));
+    setQuizResults((prev) => prev.filter((r) => r.studentId !== userId));
+    setTeacherComments((prev) =>
+      prev.filter((c) => c.teacherId !== userId && c.studentId !== userId && c.parentId !== userId)
+    );
+
+    if (currentUser?.id === userId) {
+      logout();
+    }
+
+    deleteProfileFromSupabase(userId);
+  };
+
+  const bulkDeleteAccounts = (userIds: string[]) => {
+    if (!userIds || userIds.length === 0) return;
+    const idSet = new Set(userIds);
+    setUsers((prev) => prev.filter((u) => !idSet.has(u.id)));
+    setStudentDetails((prev) => prev.filter((d) => !idSet.has(d.studentId)));
+    setQuizResults((prev) => prev.filter((r) => !idSet.has(r.studentId)));
+    setTeacherComments((prev) =>
+      prev.filter((c) => !idSet.has(c.teacherId) && !idSet.has(c.studentId) && !idSet.has(c.parentId))
+    );
+
+    if (currentUser && idSet.has(currentUser.id)) {
+      logout();
+    }
+
+    deleteProfilesFromSupabase(userIds);
+  };
+
+  const bulkUpdateAccounts = (
+    userIds: string[],
+    updates: { role?: UserRole; classId?: string; phoneNumber?: string }
+  ) => {
+    if (!userIds || userIds.length === 0) return;
+    const idSet = new Set(userIds);
+
+    if (updates.role || updates.phoneNumber) {
+      setUsers((prev) =>
+        prev.map((user) => {
+          if (idSet.has(user.id)) {
+            const updated = {
+              ...user,
+              ...(updates.role ? { role: updates.role } : {}),
+              ...(updates.phoneNumber ? { phoneNumber: updates.phoneNumber } : {}),
+            };
+            persistProfileToSupabase(updated);
+            return updated;
+          }
+          return user;
+        })
+      );
+    }
+
+    if (updates.classId) {
+      setStudentDetails((prev) =>
+        prev.map((detail) => {
+          if (idSet.has(detail.studentId)) {
+            const updated = { ...detail, classId: updates.classId! };
+            persistStudentDetailToSupabase(updated);
+            return updated;
+          }
+          return detail;
+        })
+      );
+    }
   };
 
   const bulkCreateAccounts = (
@@ -667,6 +795,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       logout,
       switchUser,
       createAccount,
+      updateAccount,
+      deleteAccount,
+      bulkDeleteAccounts,
+      bulkUpdateAccounts,
       bulkCreateAccounts,
       bindStudentToClass,
       assignTeacherToClass,

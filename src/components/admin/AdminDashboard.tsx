@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
+import { AccountDirectoryManager } from './AccountDirectoryManager';
 import {
   Users,
   UserPlus,
@@ -30,6 +31,7 @@ import {
   UserCheck,
   RefreshCw,
   Database,
+  UserCog,
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -302,8 +304,8 @@ export const AdminDashboard: React.FC = () => {
           }`}
           id="admin-tab-accounts"
         >
-          <UserPlus className="w-4 h-4" />
-          Account Provisioning
+          <UserCog className="w-4 h-4" />
+          Account Governance & Directory ({users.length})
         </button>
 
         <button
@@ -415,118 +417,11 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* User Directory Table */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-5 bg-blue-600 rounded-full shrink-0" />
-                <div>
-                  <h3 className="font-bold text-slate-900 text-base font-['Plus_Jakarta_Sans',sans-serif]">
-                    System User Directory ({filteredUsers.length})
-                  </h3>
-                  <p className="text-xs text-slate-500">All registered system accounts under RBAC governance</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-56">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    placeholder="Filter by name, email..."
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-                  />
-                </div>
-
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                  className="py-1.5 px-3 rounded-lg border border-slate-200 text-xs bg-slate-50 font-medium text-slate-700"
-                >
-                  <option value="all">All Roles</option>
-                  <option value="admin">Admin</option>
-                  <option value="teacher">Teacher</option>
-                  <option value="student">Student</option>
-                  <option value="parent">Parent</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600">
-                <thead className="bg-slate-50 text-slate-700 uppercase font-bold text-[11px] border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4">User</th>
-                    <th className="py-3 px-4">Role</th>
-                    <th className="py-3 px-4">Email</th>
-                    <th className="py-3 px-4">Phone</th>
-                    <th className="py-3 px-4">Class / Details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredUsers.map((u) => {
-                    const studentDet = studentDetails.find((d) => d.studentId === u.id);
-                    const assignedClass = classes.find((c) =>
-                      u.role === 'teacher' ? c.teacherId === u.id : c.id === studentDet?.classId
-                    );
-
-                    return (
-                      <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4 flex items-center gap-3">
-                          <img
-                            src={
-                              u.avatarUrl ||
-                              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
-                            }
-                            alt={u.fullName}
-                            className="w-7 h-7 rounded-lg object-cover border border-slate-200"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div>
-                            <span className="font-bold text-slate-900">{u.fullName}</span>
-                            <span className="block text-[10px] font-mono text-slate-400">{u.id}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold border ${
-                              u.role === 'admin'
-                                ? 'bg-purple-100 text-purple-800 border-purple-200'
-                                : u.role === 'teacher'
-                                ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                                : u.role === 'student'
-                                ? 'bg-blue-100 text-blue-800 border-blue-200'
-                                : 'bg-slate-100 text-slate-800 border-slate-200'
-                            }`}
-                          >
-                            {u.role}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-mono">{u.email}</td>
-                        <td className="py-3 px-4">{u.phoneNumber || '-'}</td>
-                        <td className="py-3 px-4">
-                          {assignedClass ? (
-                            <span className="font-medium text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
-                              {assignedClass.name}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 italic">None</span>
-                          )}
-                          {studentDet?.parentName && (
-                            <span className="block text-[10px] text-slate-500 mt-0.5">
-                              Parent: {studentDet.parentName}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* System User Directory Table & Quick Actions */}
+          <AccountDirectoryManager
+            title={`System User Directory (${users.length})`}
+            subtitle="Search, filter, edit credentials, assign classes, or perform bulk deletions with RBAC governance."
+          />
         </div>
       )}
 
@@ -722,11 +617,12 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: ACCOUNT PROVISIONING (SINGLE & BULK) */}
+      {/* TAB 3: ACCOUNT PROVISIONING & DIRECTORY MANAGEMENT */}
       {activeTab === 'accounts' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Individual Account Creation */}
-          <div className="lg:col-span-6 bg-white rounded-xl p-6 border border-slate-200 shadow-xs space-y-4">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Individual Account Creation */}
+            <div className="lg:col-span-6 bg-white rounded-xl p-6 border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <span className="w-1.5 h-5 bg-blue-600 rounded-full shrink-0" />
               <div>
@@ -971,7 +867,14 @@ export const AdminDashboard: React.FC = () => {
             </form>
           </div>
         </div>
-      )}
+
+        {/* User Directory Management & Bulk Actions */}
+        <AccountDirectoryManager
+          title="Account Governance & Bulk Action Management"
+          subtitle="Select accounts to edit credentials, change roles, assign classes, export CSV rosters, or permanently delete users."
+        />
+      </div>
+    )}
 
       {/* TAB 4: CLASS & STUDENT-TEACHER BINDINGS */}
       {activeTab === 'binding' && (

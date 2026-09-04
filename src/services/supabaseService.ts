@@ -286,6 +286,33 @@ export const persistProfileToSupabase = async (user: User) => {
   }
 };
 
+export const deleteProfileFromSupabase = async (userId: string) => {
+  if (!isSupabaseConfigured()) return;
+  try {
+    await Promise.allSettled([
+      supabase.from('student_details').delete().eq('student_id', userId),
+      supabase.from('teacher_comments').delete().or(`teacher_id.eq.${userId},student_id.eq.${userId},parent_id.eq.${userId}`),
+      supabase.from('quiz_results').delete().eq('student_id', userId),
+      supabase.from('profiles').delete().eq('id', userId),
+    ]);
+  } catch (err) {
+    console.warn('Supabase deleteProfile notice:', err);
+  }
+};
+
+export const deleteProfilesFromSupabase = async (userIds: string[]) => {
+  if (!isSupabaseConfigured() || userIds.length === 0) return;
+  try {
+    await Promise.allSettled([
+      supabase.from('student_details').delete().in('student_id', userIds),
+      supabase.from('quiz_results').delete().in('student_id', userIds),
+      supabase.from('profiles').delete().in('id', userIds),
+    ]);
+  } catch (err) {
+    console.warn('Supabase bulk deleteProfiles notice:', err);
+  }
+};
+
 export const persistStudentDetailToSupabase = async (detail: StudentDetail) => {
   if (!isSupabaseConfigured()) return;
   try {
