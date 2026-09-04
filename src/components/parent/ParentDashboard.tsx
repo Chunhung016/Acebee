@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CommentCategory } from '../../types';
+import { UserAvatar } from '../common/UserAvatar';
 import {
   Users,
   HeartHandshake,
@@ -188,14 +189,11 @@ export const ParentDashboard: React.FC = () => {
           {/* Teacher Quick Contact Banner */}
           <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <img
-                src={
-                  teacherUser?.avatarUrl ||
-                  'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80'
-                }
-                alt={teacherUser?.fullName}
-                className="w-12 h-12 rounded-lg object-cover border border-slate-200"
-                referrerPolicy="no-referrer"
+              <UserAvatar
+                name={teacherUser?.fullName || 'Teacher'}
+                avatarUrl={teacherUser?.avatarUrl}
+                role="teacher"
+                size="lg"
               />
               <div>
                 <span className="text-[10px] font-bold uppercase text-blue-800 bg-blue-100 px-2 py-0.5 rounded">
@@ -240,14 +238,11 @@ export const ParentDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <img
-              src={
-                teacherUser?.avatarUrl ||
-                'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80'
-              }
-              alt={teacherUser?.fullName}
-              className="w-16 h-16 rounded-lg object-cover border border-slate-200"
-              referrerPolicy="no-referrer"
+            <UserAvatar
+              name={teacherUser?.fullName || 'Teacher'}
+              avatarUrl={teacherUser?.avatarUrl}
+              role="teacher"
+              size="xl"
             />
             <div>
               <h4 className="text-base font-bold text-slate-900">{teacherUser?.fullName}</h4>

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Quiz } from '../../types';
 import { QuizTakerModal } from './QuizTakerModal';
+import { UserAvatar } from '../common/UserAvatar';
 import {
   Award,
   BookOpen,
@@ -319,14 +320,12 @@ export const StudentDashboard: React.FC = () => {
                       )}
                     </div>
 
-                    <img
-                      src={
-                        scholar.avatarUrl ||
-                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
-                      }
-                      alt={scholar.name}
-                      className="w-10 h-10 rounded-lg object-cover border border-slate-200"
-                      referrerPolicy="no-referrer"
+                    <UserAvatar
+                      name={scholar.name}
+                      avatarUrl={scholar.avatarUrl}
+                      role="student"
+                      size="md"
+                      className="w-10 h-10 rounded-lg"
                     />
 
                     <div>
@@ -417,14 +416,11 @@ export const StudentDashboard: React.FC = () => {
       {activeTab === 'teacher' && (
         <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs max-w-xl space-y-4">
           <div className="flex items-center gap-4">
-            <img
-              src={
-                teacherUser?.avatarUrl ||
-                'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80'
-              }
-              alt={teacherUser?.fullName}
-              className="w-16 h-16 rounded-lg object-cover border border-slate-200"
-              referrerPolicy="no-referrer"
+            <UserAvatar
+              name={teacherUser?.fullName || 'Teacher'}
+              avatarUrl={teacherUser?.avatarUrl}
+              role="teacher"
+              size="xl"
             />
             <div>
               <span className="text-[10px] font-bold uppercase text-blue-800 bg-blue-100 px-2 py-0.5 rounded">

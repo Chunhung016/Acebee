@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Subject, CommentCategory, QuizQuestion, StudentDetail } from '../../types';
+import { UserAvatar } from '../common/UserAvatar';
+import { ProfilePhotoModal } from '../common/ProfilePhotoModal';
 import {
   BookOpen,
   Users,
@@ -19,6 +21,7 @@ import {
   Calendar,
   Send,
   HelpCircle,
+  Camera,
 } from 'lucide-react';
 
 export const TeacherDashboard: React.FC = () => {
@@ -38,6 +41,7 @@ export const TeacherDashboard: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'roster' | 'quizzes' | 'behavior' | 'gradebook'>('roster');
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
   // Find teacher's assigned class
   const teacherClass = classes.find((c) => c.teacherId === currentUser?.id) || classes[0];
@@ -200,25 +204,55 @@ export const TeacherDashboard: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Top Welcome Banner */}
-      <div className="bg-blue-900 rounded-2xl p-6 text-white shadow-md border border-blue-950 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
+      <div className="bg-blue-900 rounded-2xl p-6 text-white shadow-md border border-blue-950 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
 
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-blue-100 text-xs font-mono uppercase tracking-wider mb-2">
-            <BookOpen className="w-3.5 h-3.5 text-blue-300" />
-            Teacher Classroom Portal (All 5 Core Subjects)
+        <div className="flex items-center gap-4 relative z-10">
+          <div className="relative group">
+            <UserAvatar
+              name={currentUser?.fullName}
+              avatarUrl={currentUser?.avatarUrl}
+              role="teacher"
+              size="xl"
+              className="border-2 border-white/20 shadow-md"
+            />
+            <button
+              onClick={() => setIsPhotoModalOpen(true)}
+              className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-500 text-white p-1.5 rounded-full shadow-md border-2 border-blue-900 transition-transform active:scale-95"
+              title="Upload / Change Profile Picture"
+              id="teacher-avatar-edit-btn"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <h1 className="text-2xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] tracking-tight">
-            Welcome, {currentUser?.fullName}
-          </h1>
-          <p className="text-xs text-blue-200 mt-1 leading-relaxed">
-            Homeroom Class: <strong className="text-white">{teacherClass?.name || 'Assigned Class'}</strong> ({teacherClass?.gradeLevel}) • {assignedStudentDetails.length} Enrolled Students
-          </p>
+
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-blue-100 text-xs font-mono uppercase tracking-wider mb-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-blue-300" />
+              Teacher Classroom Portal
+            </div>
+            <h1 className="text-2xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] tracking-tight">
+              Welcome, {currentUser?.fullName}
+            </h1>
+            <p className="text-xs text-blue-200 mt-0.5 leading-relaxed">
+              Homeroom Class: <strong className="text-white">{teacherClass?.name || 'Assigned Class'}</strong> ({teacherClass?.gradeLevel}) • {assignedStudentDetails.length} Enrolled Students
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-blue-950/80 px-4 py-2.5 rounded-lg border border-blue-800/80 text-xs text-blue-100 relative z-10 shrink-0">
-          <Sparkles className="w-4 h-4 text-blue-300" />
-          <span>Curriculum: Math, English, Science, Social Studies, Art</span>
+        <div className="flex items-center gap-3 relative z-10 shrink-0">
+          <button
+            onClick={() => setIsPhotoModalOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-semibold text-white flex items-center gap-1.5 transition-colors"
+            id="teacher-upload-photo-btn"
+          >
+            <Camera className="w-4 h-4 text-blue-200" />
+            <span>Upload Photo</span>
+          </button>
+          <div className="hidden sm:flex items-center gap-2 bg-blue-950/80 px-4 py-2.5 rounded-lg border border-blue-800/80 text-xs text-blue-100">
+            <Sparkles className="w-4 h-4 text-blue-300" />
+            <span>Curriculum: Math, English, Science, Social Studies, Art</span>
+          </div>
         </div>
       </div>
 
@@ -304,14 +338,11 @@ export const TeacherDashboard: React.FC = () => {
                   <div key={det.id} className="p-5 hover:bg-slate-50/60 transition-colors">
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={
-                            studentUser?.avatarUrl ||
-                            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
-                          }
-                          alt={studentUser?.fullName}
-                          className="w-12 h-12 rounded-lg object-cover border border-slate-200"
-                          referrerPolicy="no-referrer"
+                        <UserAvatar
+                          name={studentUser?.fullName}
+                          avatarUrl={studentUser?.avatarUrl}
+                          role="student"
+                          size="lg"
                         />
                         <div>
                           <h4 className="font-bold text-slate-900 text-sm">
@@ -995,6 +1026,12 @@ export const TeacherDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Teacher Profile Photo Modal */}
+      <ProfilePhotoModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+      />
     </div>
   );
 };

@@ -90,7 +90,7 @@ export interface TeacherComment {
 export interface Announcement {
   id: string;
   title: string;
-  category: 'General' | 'Academic' | 'Event' | 'Sports' | 'Arts' | 'Notice';
+  category: string;
   content: string;
   imageUrl?: string;
   badge?: string;

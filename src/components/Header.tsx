@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { UserAvatar } from './common/UserAvatar';
+import { ProfilePhotoModal } from './common/ProfilePhotoModal';
 import {
   LogIn,
   LogOut,
@@ -10,6 +12,7 @@ import {
   BookOpen,
   Award,
   Users,
+  Camera,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -23,6 +26,7 @@ export const Header: React.FC = () => {
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
   const getRoleBadge = (role: string) => {
     switch (role) {
@@ -110,11 +114,11 @@ export const Header: React.FC = () => {
                     className="flex items-center gap-2.5 p-1.5 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-2xs"
                     id="user-profile-menu-btn"
                   >
-                    <img
-                      src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
-                      alt={currentUser.fullName}
-                      className="w-7 h-7 rounded-md object-cover border border-slate-200"
-                      referrerPolicy="no-referrer"
+                    <UserAvatar
+                      name={currentUser.fullName}
+                      avatarUrl={currentUser.avatarUrl}
+                      role={currentUser.role}
+                      size="sm"
                     />
                     <div className="text-left hidden lg:block pr-1">
                       <p className="text-xs font-bold text-slate-800 leading-tight">
@@ -137,16 +141,24 @@ export const Header: React.FC = () => {
                       className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50 animate-in fade-in slide-in-from-top-1"
                       onMouseLeave={() => setIsUserMenuOpen(false)}
                     >
-                      <div className="px-3 py-2 border-b border-slate-100">
-                        <p className="text-xs font-bold text-slate-900">{currentUser.fullName}</p>
-                        <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
-                        <span
-                          className={`mt-1 inline-flex items-center gap-1 text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${getRoleBadge(
-                            currentUser.role
-                          )}`}
-                        >
-                          {currentUser.role} Account
-                        </span>
+                      <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2.5">
+                        <UserAvatar
+                          name={currentUser.fullName}
+                          avatarUrl={currentUser.avatarUrl}
+                          role={currentUser.role}
+                          size="md"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900 truncate">{currentUser.fullName}</p>
+                          <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
+                          <span
+                            className={`mt-1 inline-flex items-center gap-1 text-[10px] uppercase font-bold px-2 py-0.2 rounded border ${getRoleBadge(
+                              currentUser.role
+                            )}`}
+                          >
+                            {currentUser.role} Account
+                          </span>
+                        </div>
                       </div>
 
                       <div className="py-1">
@@ -159,6 +171,17 @@ export const Header: React.FC = () => {
                         >
                           <LayoutDashboard className="w-3.5 h-3.5 text-blue-600" />
                           Open Dashboard
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsPhotoModalOpen(true);
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium"
+                          id="header-update-photo-btn"
+                        >
+                          <Camera className="w-3.5 h-3.5 text-blue-600" />
+                          Update Profile Photo
                         </button>
                         <button
                           onClick={() => {
@@ -212,6 +235,12 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Profile Photo Upload Modal */}
+      <ProfilePhotoModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+      />
     </header>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { User, UserRole, StudentDetail } from '../../types';
+import { UserAvatar } from '../common/UserAvatar';
 import {
   Search,
   Pencil,
@@ -480,14 +481,12 @@ export const AccountDirectoryManager: React.FC<AccountDirectoryManagerProps> = (
 
                     {/* User Profile */}
                     <td className="py-3 px-4 flex items-center gap-3">
-                      <img
-                        src={
-                          u.avatarUrl ||
-                          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
-                        }
-                        alt={u.fullName}
-                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
-                        referrerPolicy="no-referrer"
+                      <UserAvatar
+                        name={u.fullName}
+                        avatarUrl={u.avatarUrl}
+                        role={u.role}
+                        size="sm"
+                        className="w-8 h-8 rounded-lg"
                       />
                       <div className="min-w-0">
                         <span className="font-bold text-slate-900 block truncate">{u.fullName}</span>

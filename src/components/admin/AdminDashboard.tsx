@@ -86,7 +86,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Announcement Form State
   const [annTitle, setAnnTitle] = useState('');
-  const [annCategory, setAnnCategory] = useState<'General' | 'Academic' | 'Event' | 'Sports' | 'Arts' | 'Notice'>('Academic');
+  const [annCategory, setAnnCategory] = useState<string>('Academic');
   const [annContent, setAnnContent] = useState('');
   const [annImageUrl, setAnnImageUrl] = useState('');
   const [annBadge, setAnnBadge] = useState('');
@@ -146,7 +146,6 @@ export const AdminDashboard: React.FC = () => {
         email: singleEmail,
         role: singleRole,
         phoneNumber: singlePhone || '+1 (555) 000-0000',
-        avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80`,
       },
       singleRole === 'student'
         ? {
@@ -1095,19 +1094,24 @@ export const AdminDashboard: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Category *
                   </label>
-                  <select
+                  <input
+                    type="text"
+                    required
+                    list="category-suggestions"
                     value={annCategory}
-                    onChange={(e) => setAnnCategory(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium"
-                    id="announcement-category-select"
-                  >
-                    <option value="Academic">Academic</option>
-                    <option value="Event">Event</option>
-                    <option value="Sports">Sports</option>
-                    <option value="Arts">Arts</option>
-                    <option value="Notice">Notice</option>
-                    <option value="General">General</option>
-                  </select>
+                    onChange={(e) => setAnnCategory(e.target.value)}
+                    placeholder="e.g. Academic, Sports, Event..."
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    id="announcement-category-input"
+                  />
+                  <datalist id="category-suggestions">
+                    <option value="Academic" />
+                    <option value="Event" />
+                    <option value="Notice" />
+                    <option value="Sports" />
+                    <option value="Arts" />
+                    <option value="General" />
+                  </datalist>
                 </div>
 
                 <div>
@@ -1134,7 +1138,7 @@ export const AdminDashboard: React.FC = () => {
                     type="url"
                     value={annImageUrl}
                     onChange={(e) => setAnnImageUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/... or direct link"
+                    placeholder="https://example.com/photo.jpg or direct image link"
                     className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-200 text-xs font-mono"
                     id="announcement-image-input"
                   />

@@ -226,13 +226,12 @@ CREATE POLICY "Parent update read status" ON public.teacher_comments
 
 -- ==============================================================================
 -- 12. SEED INITIAL ADMIN ACCOUNT & DEFAULT METADATA
--- Credentials: Email: admin@lb.com | Password: 212832Lb
 -- ==============================================================================
 -- Note: In Supabase production, create the Auth user via Supabase Dashboard / Admin API,
--- or run the following snippet in SQL Editor:
+-- or run the following snippet with your own secure credentials in SQL Editor:
 
 /*
--- Step 1: Create auth user (Password: 212832Lb)
+-- Step 1: Create auth user (Replace <SECURE_PASSWORD> with your confidential password)
 INSERT INTO auth.users (
     instance_id,
     id,
@@ -251,7 +250,7 @@ INSERT INTO auth.users (
     'authenticated',
     'authenticated',
     'admin@lb.com',
-    crypt('212832Lb', gen_salt('bf')),
+    crypt('<YOUR_SECURE_ADMIN_PASSWORD>', gen_salt('bf')),
     NOW(),
     '{"provider":"email","providers":["email"]}',
     '{"full_name":"Acebee Head Administrator"}',
@@ -273,7 +272,7 @@ INSERT INTO public.profiles (
     'Acebee Head Administrator',
     'admin',
     '+1 (555) 019-2832',
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+    NULL
 ) ON CONFLICT (id) DO NOTHING;
 */
 `;

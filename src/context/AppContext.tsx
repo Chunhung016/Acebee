@@ -298,10 +298,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const login = (email: string, pass: string): { success: boolean; message?: string } => {
     const normalizedEmail = email.trim().toLowerCase();
     
-    // Check pre-seeded admin hardcoded requirement: admin@lb.com | 212832Lb
+    // Check pre-seeded admin requirement
     if (normalizedEmail === 'admin@lb.com') {
       if (pass !== '212832Lb') {
-        return { success: false, message: 'Invalid admin password. Default is: 212832Lb' };
+        return { success: false, message: 'Invalid admin credentials. Please check your password and try again.' };
       }
       const adminUser = users.find((u) => u.email.toLowerCase() === 'admin@lb.com') || INITIAL_USERS[0];
       setCurrentUser(adminUser);

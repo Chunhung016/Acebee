@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Announcement } from '../types';
 import {
@@ -27,7 +27,24 @@ export const PublicDashboard: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [activeAnnouncement, setActiveAnnouncement] = useState<Announcement | null>(null);
 
-  const categories = ['All', 'Academic', 'Event', 'Sports', 'Arts', 'Notice', 'General'];
+  // Dynamic categories extracted from existing announcements created by admin
+  const availableCategories = useMemo(() => {
+    const categorySet = new Set<string>();
+    announcements.forEach((ann) => {
+      if (ann.category && ann.category.trim().length > 0) {
+        categorySet.add(ann.category.trim());
+      }
+    });
+    const uniqueCats = Array.from(categorySet);
+    return uniqueCats.length > 0 ? ['All', ...uniqueCats] : [];
+  }, [announcements]);
+
+  // Reset selected category to 'All' if the category is deleted or not available
+  useEffect(() => {
+    if (selectedCategory !== 'All' && !availableCategories.includes(selectedCategory)) {
+      setSelectedCategory('All');
+    }
+  }, [availableCategories, selectedCategory]);
 
   const filteredAnnouncements = useMemo(() => {
     return announcements.filter((ann) => {
@@ -35,7 +52,7 @@ export const PublicDashboard: React.FC = () => {
         ann.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ann.content.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory =
-        selectedCategory === 'All' || ann.category === selectedCategory;
+        selectedCategory === 'All' || !selectedCategory || ann.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
   }, [announcements, searchQuery, selectedCategory]);
@@ -49,20 +66,22 @@ export const PublicDashboard: React.FC = () => {
     [filteredAnnouncements]
   );
 
-  const getCategoryBadgeClass = (category: string) => {
-    switch (category) {
-      case 'Academic':
+  const getCategoryBadgeClass = (category?: string) => {
+    switch (category?.toLowerCase()) {
+      case 'academic':
         return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'Event':
+      case 'event':
         return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'Sports':
+      case 'sports':
         return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'Arts':
+      case 'arts':
         return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'Notice':
+      case 'notice':
         return 'bg-rose-100 text-rose-800 border-rose-200';
-      default:
+      case 'general':
         return 'bg-slate-100 text-slate-800 border-slate-200';
+      default:
+        return 'bg-indigo-100 text-indigo-800 border-indigo-200';
     }
   };
 
@@ -222,26 +241,28 @@ export const PublicDashboard: React.FC = () => {
               />
             </div>
 
-            {/* Category Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-              <span className="text-xs text-slate-500 font-semibold flex items-center gap-1 mr-1 shrink-0 uppercase tracking-wider text-[11px]">
-                <Filter className="w-3.5 h-3.5 text-blue-600" /> Category:
-              </span>
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                    selectedCategory === cat
-                      ? 'bg-blue-900 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                  }`}
-                  id={`cat-filter-${cat.toLowerCase()}`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+            {/* Category Pills - only appears when admin has created announcements with categories */}
+            {availableCategories.length > 1 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+                <span className="text-xs text-slate-500 font-semibold flex items-center gap-1 mr-1 shrink-0 uppercase tracking-wider text-[11px]">
+                  <Filter className="w-3.5 h-3.5 text-blue-600" /> Category:
+                </span>
+                {availableCategories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      selectedCategory === cat
+                        ? 'bg-blue-900 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                    }`}
+                    id={`cat-filter-${cat.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
