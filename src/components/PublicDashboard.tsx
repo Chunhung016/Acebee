@@ -128,10 +128,11 @@ export const PublicDashboard: React.FC = () => {
                   </>
                 )}
               </h1>
-              <p className="text-blue-100 text-sm sm:text-base max-w-2xl leading-relaxed">
-                {schoolInfo.description ||
-                  'Welcome to our central educational portal. Stay informed on campus announcements, curriculum activities, and institutional news.'}
-              </p>
+              {schoolInfo.description && (
+                <p className="text-blue-100 text-sm sm:text-base max-w-2xl leading-relaxed">
+                  {schoolInfo.description}
+                </p>
+              )}
 
               {(schoolInfo.address || schoolInfo.schoolNumber) && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-blue-200 pt-1">

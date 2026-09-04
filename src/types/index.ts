@@ -1,5 +1,19 @@
 export type UserRole = 'admin' | 'teacher' | 'student' | 'parent';
 
+export const ACADEMIC_LEVELS = [
+  'Year 1',
+  'Year 2',
+  'Year 3',
+  'Year 4',
+  'Year 5',
+  'Year 6',
+  'Form 1',
+  'Form 2',
+  'Form 3',
+] as const;
+
+export type AcademicLevel = (typeof ACADEMIC_LEVELS)[number] | string;
+
 export type Subject = 'Mathematics' | 'English' | 'Science' | 'Social Studies' | 'Art & Technology';
 
 export interface User {

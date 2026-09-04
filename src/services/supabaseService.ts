@@ -270,6 +270,15 @@ export const persistClassToSupabase = async (cls: SchoolClass) => {
   }
 };
 
+export const deleteClassFromSupabase = async (classId: string) => {
+  if (!isSupabaseConfigured()) return;
+  try {
+    await supabase.from('classes').delete().eq('id', classId);
+  } catch (err) {
+    console.warn('Supabase class delete notice:', err);
+  }
+};
+
 export const persistProfileToSupabase = async (user: User) => {
   if (!isSupabaseConfigured()) return;
   try {
@@ -351,6 +360,18 @@ export const persistQuizToSupabase = async (quiz: Quiz) => {
   }
 };
 
+export const deleteQuizFromSupabase = async (quizId: string) => {
+  if (!isSupabaseConfigured()) return;
+  try {
+    await Promise.allSettled([
+      supabase.from('quiz_results').delete().eq('quiz_id', quizId),
+      supabase.from('quizzes').delete().eq('id', quizId),
+    ]);
+  } catch (err) {
+    console.warn('Supabase quiz delete notice:', err);
+  }
+};
+
 export const persistQuizResultToSupabase = async (result: QuizResult) => {
   if (!isSupabaseConfigured()) return;
   try {
@@ -384,6 +405,15 @@ export const persistTeacherCommentToSupabase = async (comment: TeacherComment) =
     });
   } catch (err) {
     console.warn('Supabase comment upsert notice:', err);
+  }
+};
+
+export const deleteTeacherCommentFromSupabase = async (commentId: string) => {
+  if (!isSupabaseConfigured()) return;
+  try {
+    await supabase.from('teacher_comments').delete().eq('id', commentId);
+  } catch (err) {
+    console.warn('Supabase teacher comment delete notice:', err);
   }
 };
 

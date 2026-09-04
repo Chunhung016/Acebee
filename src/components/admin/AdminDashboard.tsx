@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { UserRole } from '../../types';
+import { UserRole, SchoolClass, ACADEMIC_LEVELS } from '../../types';
 import { AccountDirectoryManager } from './AccountDirectoryManager';
 import {
   Users,
@@ -14,6 +14,7 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Pin,
   Image as ImageIcon,
   BookOpen,
@@ -32,6 +33,9 @@ import {
   RefreshCw,
   Database,
   UserCog,
+  Edit3,
+  X,
+  Check,
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -47,6 +51,8 @@ export const AdminDashboard: React.FC = () => {
     bindStudentToClass,
     assignTeacherToClass,
     createClass,
+    updateClass,
+    deleteClass,
     createAnnouncement,
     deleteAnnouncement,
     togglePinAnnouncement,
@@ -95,10 +101,20 @@ export const AdminDashboard: React.FC = () => {
 
   // New Class Form State
   const [newClassName, setNewClassName] = useState('');
-  const [newClassGrade, setNewClassGrade] = useState('Grade 5');
+  const [newClassGrade, setNewClassGrade] = useState<string>(ACADEMIC_LEVELS[0]);
   const [newClassTeacherId, setNewClassTeacherId] = useState(
     users.find((u) => u.role === 'teacher')?.id || ''
   );
+
+  // Edit Class Modal State
+  const [editingClass, setEditingClass] = useState<SchoolClass | null>(null);
+  const [editClassName, setEditClassName] = useState('');
+  const [editClassGrade, setEditClassGrade] = useState<string>(ACADEMIC_LEVELS[0]);
+  const [editClassYear, setEditClassYear] = useState('2025-2026');
+  const [editClassTeacherId, setEditClassTeacherId] = useState('');
+
+  // Delete Class Modal State
+  const [classToDelete, setClassToDelete] = useState<SchoolClass | null>(null);
 
   // User search filter
   const [userSearch, setUserSearch] = useState('');
@@ -215,8 +231,34 @@ export const AdminDashboard: React.FC = () => {
   const handleCreateClass = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassName.trim()) return;
-    createClass(newClassName, newClassGrade, newClassTeacherId);
+    createClass(newClassName.trim(), newClassGrade, newClassTeacherId);
     setNewClassName('');
+  };
+
+  const openEditClassModal = (cls: SchoolClass) => {
+    setEditingClass(cls);
+    setEditClassName(cls.name);
+    setEditClassGrade(cls.gradeLevel);
+    setEditClassYear(cls.academicYear || '2025-2026');
+    setEditClassTeacherId(cls.teacherId || '');
+  };
+
+  const handleSaveEditClass = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClass || !editClassName.trim()) return;
+    updateClass(editingClass.id, {
+      name: editClassName.trim(),
+      gradeLevel: editClassGrade,
+      academicYear: editClassYear.trim() || '2025-2026',
+      teacherId: editClassTeacherId,
+    });
+    setEditingClass(null);
+  };
+
+  const handleConfirmDeleteClass = () => {
+    if (!classToDelete) return;
+    deleteClass(classToDelete.id);
+    setClassToDelete(null);
   };
 
   return (
@@ -885,7 +927,7 @@ export const AdminDashboard: React.FC = () => {
                 Create New Academic Class
               </h3>
               <p className="text-xs text-slate-500">
-                Establish a homeroom section and assign a lead teacher
+                Establish a homeroom section (Year 1 - Year 6, Form 1 - Form 3) and assign a lead teacher
               </p>
             </div>
 
@@ -895,8 +937,8 @@ export const AdminDashboard: React.FC = () => {
                 required
                 value={newClassName}
                 onChange={(e) => setNewClassName(e.target.value)}
-                placeholder="Class Name (e.g. 5-A STEM)"
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs flex-1 sm:w-44"
+                placeholder="Class Name (e.g. Year 1 Alpha / Form 1 STEM)"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs flex-1 sm:w-52"
               />
 
               <select
@@ -904,12 +946,11 @@ export const AdminDashboard: React.FC = () => {
                 onChange={(e) => setNewClassGrade(e.target.value)}
                 className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 font-medium text-slate-700"
               >
-                <option value="Grade 1">Grade 1</option>
-                <option value="Grade 2">Grade 2</option>
-                <option value="Grade 3">Grade 3</option>
-                <option value="Grade 4">Grade 4</option>
-                <option value="Grade 5">Grade 5</option>
-                <option value="Grade 6">Grade 6</option>
+                {ACADEMIC_LEVELS.map((lvl) => (
+                  <option key={lvl} value={lvl}>
+                    {lvl}
+                  </option>
+                ))}
               </select>
 
               <select
@@ -941,7 +982,7 @@ export const AdminDashboard: React.FC = () => {
               <Layers className="w-10 h-10 text-slate-300 mx-auto" />
               <h4 className="font-bold text-slate-800 text-sm">No Classes Established Yet</h4>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Use the form above to establish your school's classrooms, assign faculty, and enroll students.
+                Use the form above to establish your school's classrooms (Year 1 to Year 6, Form 1 to Form 3), assign faculty, and enroll students.
               </p>
             </div>
           ) : (
@@ -953,21 +994,44 @@ export const AdminDashboard: React.FC = () => {
                 return (
                   <div
                     key={cls.id}
-                    className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs space-y-4"
+                    className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs space-y-4 hover:border-slate-300 transition-colors"
                   >
                     <div className="flex items-start justify-between pb-3 border-b border-slate-100">
                       <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                          {cls.gradeLevel} • {cls.academicYear}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                            {cls.gradeLevel}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            {cls.academicYear || '2025-2026'}
+                          </span>
+                        </div>
                         <h4 className="text-lg font-bold text-slate-900 mt-1 font-['Plus_Jakarta_Sans',sans-serif]">
                           {cls.name}
                         </h4>
                       </div>
 
-                      <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">
-                        {classStudents.length} Students
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded-lg">
+                          {classStudents.length} Students
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openEditClassModal(cls)}
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-700 hover:bg-blue-50 bg-white transition-colors"
+                          title="Edit Class Details"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setClassToDelete(cls)}
+                          className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 bg-white transition-colors"
+                          title="Remove / Delete Class"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Teacher Assignment */}
@@ -987,7 +1051,7 @@ export const AdminDashboard: React.FC = () => {
                       </div>
 
                       <select
-                        value={cls.teacherId}
+                        value={cls.teacherId || ''}
                         onChange={(e) => assignTeacherToClass(cls.id, e.target.value)}
                         className="text-xs font-medium px-2 py-1 rounded-lg border border-slate-200 bg-white"
                       >
@@ -1002,17 +1066,22 @@ export const AdminDashboard: React.FC = () => {
 
                     {/* Student Roster in this Class */}
                     <div>
-                      <h5 className="text-xs font-bold text-slate-700 mb-2">Assigned Students</h5>
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="text-xs font-bold text-slate-700">Assigned Students</h5>
+                        <span className="text-[11px] text-slate-400">{classStudents.length} enrolled</span>
+                      </div>
                       <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                         {classStudents.length === 0 ? (
-                          <p className="text-xs text-slate-400 italic">No students assigned to this class yet.</p>
+                          <p className="text-xs text-slate-400 italic py-2 text-center bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                            No students assigned to this class yet.
+                          </p>
                         ) : (
                           classStudents.map((det) => {
                             const studentUser = users.find((u) => u.id === det.studentId);
                             return (
                               <div
                                 key={det.id}
-                                className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between text-xs"
+                                className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between text-xs hover:bg-slate-100/70 transition-colors"
                               >
                                 <div>
                                   <span className="font-bold text-slate-800">
@@ -1265,6 +1334,168 @@ export const AdminDashboard: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CLASS MODAL */}
+      {editingClass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-900 flex items-center justify-center font-bold">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+                    Edit Class Details
+                  </h3>
+                  <p className="text-xs text-slate-500">Update classroom title, level, or lead faculty</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingClass(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditClass} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Class Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editClassName}
+                  onChange={(e) => setEditClassName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-800"
+                  placeholder="e.g. Year 1 Alpha"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Academic Level
+                  </label>
+                  <select
+                    value={editClassGrade}
+                    onChange={(e) => setEditClassGrade(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-800 bg-white"
+                  >
+                    {ACADEMIC_LEVELS.map((lvl) => (
+                      <option key={lvl} value={lvl}>
+                        {lvl}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Academic Year
+                  </label>
+                  <input
+                    type="text"
+                    value={editClassYear}
+                    onChange={(e) => setEditClassYear(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-800"
+                    placeholder="2025-2026"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Lead Homeroom Teacher
+                </label>
+                <select
+                  value={editClassTeacherId}
+                  onChange={(e) => setEditClassTeacherId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-800 bg-white"
+                >
+                  <option value="">Unassigned</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.fullName} ({t.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingClass(null)}
+                  className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold shadow-xs"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CLASS CONFIRMATION MODAL */}
+      {classToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-red-100 space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+                Delete Class "{classToDelete.name}"?
+              </h3>
+              <p className="text-xs text-slate-500">
+                This will permanently remove the classroom section ({classToDelete.gradeLevel}) and unbind any currently enrolled students.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
+              <div className="flex justify-between">
+                <span className="font-medium text-slate-500">Enrolled Students:</span>
+                <span className="font-bold text-slate-800">
+                  {studentDetails.filter((d) => d.classId === classToDelete.id).length} students
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium text-slate-500">Assigned Teacher:</span>
+                <span className="font-bold text-slate-800">
+                  {users.find((u) => u.id === classToDelete.teacherId)?.fullName || 'None'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setClassToDelete(null)}
+                className="w-1/2 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteClass}
+                className="w-1/2 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-xs"
+              >
+                Confirm Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

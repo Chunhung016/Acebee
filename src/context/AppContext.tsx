@@ -31,13 +31,16 @@ import {
   persistAnnouncementToSupabase,
   deleteAnnouncementFromSupabase,
   persistClassToSupabase,
+  deleteClassFromSupabase,
   persistProfileToSupabase,
   deleteProfileFromSupabase,
   deleteProfilesFromSupabase,
   persistStudentDetailToSupabase,
   persistQuizToSupabase,
+  deleteQuizFromSupabase,
   persistQuizResultToSupabase,
   persistTeacherCommentToSupabase,
+  deleteTeacherCommentFromSupabase,
 } from '../services/supabaseService';
 
 export interface SupabaseSyncInfo {
@@ -95,6 +98,8 @@ interface AppContextType {
   bindStudentToClass: (studentId: string, classId: string) => void;
   assignTeacherToClass: (classId: string, teacherId: string) => void;
   createClass: (name: string, gradeLevel: string, teacherId: string) => SchoolClass;
+  updateClass: (classId: string, updates: Partial<SchoolClass>) => void;
+  deleteClass: (classId: string) => void;
   createAnnouncement: (data: Omit<Announcement, 'id' | 'createdAt' | 'authorId'>) => Announcement;
   deleteAnnouncement: (id: string) => void;
   togglePinAnnouncement: (id: string) => void;
@@ -607,6 +612,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newClass;
   };
 
+  const updateClass = (classId: string, updates: Partial<SchoolClass>) => {
+    setClasses((prev) =>
+      prev.map((cls) => {
+        if (cls.id === classId) {
+          const updated = { ...cls, ...updates };
+          persistClassToSupabase(updated);
+          return updated;
+        }
+        return cls;
+      })
+    );
+  };
+
+  const deleteClass = (classId: string) => {
+    setClasses((prev) => prev.filter((c) => c.id !== classId));
+    // Clear classId for students assigned to deleted class
+    setStudentDetails((prev) =>
+      prev.map((det) => {
+        if (det.classId === classId) {
+          const updated = { ...det, classId: '' };
+          persistStudentDetailToSupabase(updated);
+          return updated;
+        }
+        return det;
+      })
+    );
+    deleteClassFromSupabase(classId);
+  };
+
   const createAnnouncement = (
     data: Omit<Announcement, 'id' | 'createdAt' | 'authorId'>
   ): Announcement => {
@@ -655,6 +689,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteQuiz = (id: string) => {
     setQuizzes((prev) => prev.filter((q) => q.id !== id));
     setQuizResults((prev) => prev.filter((r) => r.quizId !== id));
+    deleteQuizFromSupabase(id);
   };
 
   const updateStudentDetail = (studentId: string, data: Partial<StudentDetail>) => {
@@ -694,6 +729,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteTeacherComment = (id: string) => {
     setTeacherComments((prev) => prev.filter((c) => c.id !== id));
+    deleteTeacherCommentFromSupabase(id);
   };
 
   // Student Functions
@@ -803,6 +839,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bindStudentToClass,
       assignTeacherToClass,
       createClass,
+      updateClass,
+      deleteClass,
       createAnnouncement,
       deleteAnnouncement,
       togglePinAnnouncement,
