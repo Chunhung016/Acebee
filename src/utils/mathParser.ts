@@ -65,88 +65,112 @@ export function hasMathNotation(text: string): boolean {
 export function convertNaturalMathToLatex(text: string): string {
   if (!text || typeof text !== 'string') return '';
 
-  // If text already has explicit $ delimiters ($...$ or $$...$$), keep them intact
-  const hasExplicitMath = /\$\$[\s\S]+?\$\$|\$[^\$\n]+?\$|\\\[[\s\S]+?\\\]|\\\([^\n]+?\\\)|\\[a-zA-Z]+\{[^{}]*\}/.test(text);
-  if (hasExplicitMath) {
-    // If it has raw LaTeX commands like \frac{2}{3} without $, wrap them
-    return text.replace(/(\\frac\{[^{}]*\}\{[^{}]*\}|\\sqrt(\[[^\]]*\])?\{[^{}]*\})/g, (m) => `$${m}$`);
-  }
+  // Regex to match existing math blocks: $$...$$, \[...\], $...$, \(...\)
+  const mathBlockRegex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^\$\n]+?\$|\\\([^\n]+?\\\))/g;
 
-  // Preserve non-math slashes: URLs, dates, and common English idioms
-  const preserved: string[] = [];
-  let s = text.replace(/https?:\/\/[^\s]+/g, (m) => {
-    preserved.push(m);
-    return `__PRESERVED_${preserved.length - 1}__`;
+  // Split text into existing math blocks vs non-math plain text
+  const parts = text.split(mathBlockRegex);
+
+  const processedParts = parts.map((part) => {
+    if (!part) return '';
+
+    // If this part is ALREADY a valid math block, keep it intact without modifying it!
+    if (
+      (part.startsWith('$$') && part.endsWith('$$')) ||
+      (part.startsWith('\\[') && part.endsWith('\\]')) ||
+      (part.startsWith('$') && part.endsWith('$')) ||
+      (part.startsWith('\\(') && part.endsWith('\\)'))
+    ) {
+      return part;
+    }
+
+    // Otherwise, process natural math in this plain text segment
+    let s = part;
+
+    // Preserve non-math slashes: URLs, dates, and common English idioms
+    const preserved: string[] = [];
+    s = s.replace(/https?:\/\/[^\s]+/g, (m) => {
+      preserved.push(m);
+      return `__PRESERVED_${preserved.length - 1}__`;
+    });
+
+    // Protect dates like 2026/09/04 or 04/09/2026
+    s = s.replace(/\b\d{4}\/\d{1,2}\/\d{1,2}\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b/g, (m) => {
+      preserved.push(m);
+      return `__PRESERVED_${preserved.length - 1}__`;
+    });
+
+    // Protect common idioms and units with slashes
+    s = s.replace(/\b(and\/or|true\/false|yes\/no|pass\/fail|either\/or|n\/a|km\/h|m\/s|w\/o)\b/gi, (m) => {
+      preserved.push(m);
+      return `__PRESERVED_${preserved.length - 1}__`;
+    });
+
+    // 1. Convert unwrapped raw LaTeX commands like \frac{a}{b}, \sqrt{x}, \pm, \times, \div, \pi, \theta
+    s = s.replace(/(\\frac\{[^{}]*\}\{[^{}]*\}|\\sqrt(\[[^\]]*\])?\{[^{}]*\}|\\pm|\\times|\\div|\\pi|\\theta|\\le|\\ge|\\neq)/g, (m) => {
+      return `$${m}$`;
+    });
+
+    // 2. Convert unicode roots: √x or √(x + 1) or √16
+    s = s.replace(/√\s*(\([^\)]+\)|[a-zA-Z0-9]+)/g, (_m, g1) => {
+      const inner = g1.startsWith('(') && g1.endsWith(')') ? g1.slice(1, -1) : g1;
+      return `$\\sqrt{${inner}}$`;
+    });
+
+    // 3. Convert sqrt(expr), cbrt(expr), and sqrt[n](expr)
+    s = s.replace(/\bsqrt\[([^\]]+)\]\(([^)]+)\)/g, '$\\sqrt[$1]{$2}$');
+    s = s.replace(/\bcbrt\(([^)]+)\)/g, '$\\sqrt[3]{$1}$');
+    s = s.replace(/\bsqrt\(([^)]+)\)/g, '$\\sqrt{$1}$');
+
+    // 4. Convert powers: (x+1)^2, x^2, 10^-3, 2^n
+    s = s.replace(/([a-zA-Z0-9\)]+)\^(\([^\)]+\)|[a-zA-Z0-9\-]+)/g, (_m, base, exp) => {
+      const cleanExp = exp.startsWith('(') && exp.endsWith(')') ? exp.slice(1, -1) : exp;
+      return `$${base}^{${cleanExp}}$`;
+    });
+
+    // 5. Convert unicode superscripts: x², y³, 10⁵
+    s = s.replace(/([a-zA-Z0-9\)])([⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺ⁿⁱ]+)/g, (_m, base, sup) => {
+      const exp = Array.from(sup as string).map((c: string) => SUPERSCRIPT_MAP[c] || c).join('');
+      return `$${base}^{${exp}}$`;
+    });
+
+    // 6. Convert unicode subscripts: x₁, aₙ
+    s = s.replace(/([a-zA-Z0-9])([₀₁₂₃₄₅₆₇₈₉₋₊]+)/g, (_m, base, sub) => {
+      const exp = Array.from(sub as string).map((c: string) => SUBSCRIPT_MAP[c] || c).join('');
+      return `$${base}_{${exp}}$`;
+    });
+
+    // 7. Convert parenthesized fractions: (x+1)/(x-1) or (3x^2)/4
+    s = s.replace(/\(([^)]+)\)\s*\/\s*\(([^)]+)\)/g, '$\\frac{$1}{$2}$');
+    s = s.replace(/\(([^)]+)\)\s*\/\s*([a-zA-Z0-9]+)/g, '$\\frac{$1}{$2}$');
+    s = s.replace(/([a-zA-Z0-9]+)\s*\/\s*\(([^)]+)\)/g, '$\\frac{$1}{$2}$');
+
+    // 8. Convert mixed numbers: e.g. 2 1/2 or 3 3/4
+    s = s.replace(/\b(\d+)\s+(\d+)\/(\d+)\b/g, '$1$\\frac{$2}{$3}$');
+
+    // 9. Standalone numeric fractions: 3/8, 5/16, -1/2, 2/3
+    s = s.replace(/(^|[^\w\/])(-?\d+)\s*\/\s*(\d+)(?![a-zA-Z0-9_\/])/g, (_m, prefix, num, den) => {
+      return `${prefix}$\\frac{${num}}{${den}}$`;
+    });
+
+    // 10. Convert +/- to \pm
+    s = s.replace(/(\+\/-|\+-)/g, '$\\pm$');
+
+    // Restore preserved text
+    preserved.forEach((orig, idx) => {
+      s = s.replace(`__PRESERVED_${idx}__`, orig);
+    });
+
+    return s;
   });
 
-  // Protect dates like 2026/09/04 or 04/09/2026
-  s = s.replace(/\b\d{4}\/\d{1,2}\/\d{1,2}\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b/g, (m) => {
-    preserved.push(m);
-    return `__PRESERVED_${preserved.length - 1}__`;
-  });
+  // Recombine all processed parts
+  let result = processedParts.join('');
 
-  // Protect common idioms and units with slashes
-  s = s.replace(/\b(and\/or|true\/false|yes\/no|pass\/fail|either\/or|n\/a|km\/h|m\/s|w\/o)\b/gi, (m) => {
-    preserved.push(m);
-    return `__PRESERVED_${preserved.length - 1}__`;
-  });
+  // Clean up any double dollar signs or empty math delimiters
+  result = result.replace(/\$\$+/g, '$').replace(/\$\s*\$/g, '');
 
-  // 1. Convert unicode roots: √x or √(x + 1) or √16
-  s = s.replace(/√\s*(\([^\)]+\)|[a-zA-Z0-9]+)/g, (_m, g1) => {
-    const inner = g1.startsWith('(') && g1.endsWith(')') ? g1.slice(1, -1) : g1;
-    return `$\\sqrt{${inner}}$`;
-  });
-
-  // 2. Convert sqrt(expr), cbrt(expr), and sqrt[n](expr)
-  s = s.replace(/\bsqrt\[([^\]]+)\]\(([^)]+)\)/g, '$\\sqrt[$1]{$2}$');
-  s = s.replace(/\bcbrt\(([^)]+)\)/g, '$\\sqrt[3]{$1}$');
-  s = s.replace(/\bsqrt\(([^)]+)\)/g, '$\\sqrt{$1}$');
-
-  // 3. Convert powers: (x+1)^2, x^2, 10^-3, 2^n
-  s = s.replace(/([a-zA-Z0-9\)]+)\^(\([^\)]+\)|[a-zA-Z0-9\-]+)/g, (_m, base, exp) => {
-    const cleanExp = exp.startsWith('(') && exp.endsWith(')') ? exp.slice(1, -1) : exp;
-    return `$${base}^{${cleanExp}}$`;
-  });
-
-  // 4. Convert unicode superscripts: x², y³, 10⁵
-  s = s.replace(/([a-zA-Z0-9\)])([⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺ⁿⁱ]+)/g, (_m, base, sup) => {
-    const exp = Array.from(sup as string).map((c: string) => SUPERSCRIPT_MAP[c] || c).join('');
-    return `$${base}^{${exp}}$`;
-  });
-
-  // 5. Convert unicode subscripts: x₁, aₙ
-  s = s.replace(/([a-zA-Z0-9])([₀₁₂₃₄₅₆₇₈₉₋₊]+)/g, (_m, base, sub) => {
-    const exp = Array.from(sub as string).map((c: string) => SUBSCRIPT_MAP[c] || c).join('');
-    return `$${base}_{${exp}}$`;
-  });
-
-  // 6. Convert parenthesized fractions: (x+1)/(x-1) or (3x^2)/4
-  s = s.replace(/\(([^)]+)\)\s*\/\s*\(([^)]+)\)/g, '$\\frac{$1}{$2}$');
-  s = s.replace(/\(([^)]+)\)\s*\/\s*([a-zA-Z0-9]+)/g, '$\\frac{$1}{$2}$');
-  s = s.replace(/([a-zA-Z0-9]+)\s*\/\s*\(([^)]+)\)/g, '$\\frac{$1}{$2}$');
-
-  // 7. Convert mixed numbers: e.g. 2 1/2 or 3 3/4
-  s = s.replace(/\b(\d+)\s+(\d+)\/(\d+)\b/g, '$1$\\frac{$2}{$3}$');
-
-  // 8. Standalone numeric fractions: 3/8, 5/16, -1/2, 2/3
-  s = s.replace(/(^|[^\w\/])(-?\d+)\s*\/\s*(\d+)(?![a-zA-Z0-9_\/])/g, (_m, prefix, num, den) => {
-    return `${prefix}$\\frac{${num}}{${den}}$`;
-  });
-
-  // 9. Convert +/- to \pm
-  s = s.replace(/(\+\/-|\+-)/g, '$\\pm$');
-
-  // 10. Convert raw LaTeX commands like \frac{...}{...}, \sqrt{...}
-  s = s.replace(/(\\frac\{[^{}]*\}\{[^{}]*\}|\\sqrt(\[[^\]]*\])?\{[^{}]*\}|\\pm|\\times|\\div|\\pi|\\theta)/g, (m) => {
-    return `$${m}$`;
-  });
-
-  // Restore preserved text (URLs, dates, idioms)
-  preserved.forEach((orig, idx) => {
-    s = s.replace(`__PRESERVED_${idx}__`, orig);
-  });
-
-  return s;
+  return result;
 }
 
 /**
@@ -228,20 +252,31 @@ function renderInlineMath(text: string): string {
 
   const chunks = preprocessed.split(inlineRegex);
   if (chunks.length === 1) {
-    // If no split occurred, return simple escaped text
-    return escapeHtml(text).replace(/\n/g, '<br/>');
+    // If no split occurred, clean any orphan single dollar sign and return escaped text
+    const cleanText = text === '$' ? '' : text;
+    return escapeHtml(cleanText).replace(/\n/g, '<br/>');
   }
 
   return chunks
     .map((chunk) => {
+      if (!chunk) return '';
+
       if (chunk.startsWith('$') && chunk.endsWith('$')) {
-        const math = chunk.slice(1, -1).trim();
+        const math = chunk.replace(/^\$+|\$+$/g, '').trim();
+        if (!math) return '';
         return renderLatex(math, false);
       }
       if (chunk.startsWith('\\(') && chunk.endsWith('\\)')) {
         const math = chunk.slice(2, -2).trim();
+        if (!math) return '';
         return renderLatex(math, false);
       }
+
+      // If chunk is just an isolated orphan '$' created by splitting, discard it
+      if (chunk.trim() === '$') {
+        return '';
+      }
+
       return escapeHtml(chunk).replace(/\n/g, '<br/>');
     })
     .join('');
