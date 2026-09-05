@@ -57,16 +57,46 @@
       "properties": {
         "id": { "type": "string" },
         "classId": { "type": "string" },
+        "assignedClassIds": { "type": "array" },
         "teacherId": { "type": "string" },
         "title": { "type": "string" },
         "subject": { "type": "string" },
         "description": { "type": "string" },
         "timeLimitMinutes": { "type": "number" },
+        "maxAttempts": { "type": "number" },
+        "markingMode": { "type": "string", "enum": ["auto", "manual"] },
+        "totalPoints": { "type": "number" },
         "questions": { "type": "array" },
         "dueDate": { "type": "string" },
         "createdAt": { "type": "string" }
       },
       "required": ["id", "classId", "title", "subject", "questions", "dueDate", "createdAt"]
+    },
+    "QuestionBankItem": {
+      "title": "QuestionBankItem",
+      "description": "Centralized question bank item accessible by all teachers and administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["mcq", "structure", "fill_in_blank", "matching"] },
+        "subject": { "type": "string" },
+        "gradeLevel": { "type": "string" },
+        "topic": { "type": "string" },
+        "tags": { "type": "array" },
+        "question": { "type": "string" },
+        "points": { "type": "number" },
+        "options": { "type": "array" },
+        "correctAnswerIndex": { "type": "number" },
+        "modelAnswer": { "type": "string" },
+        "guidelines": { "type": "string" },
+        "acceptableAnswers": { "type": "array" },
+        "matchingPairs": { "type": "array" },
+        "explanation": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdByName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "type", "subject", "question", "points", "createdAt"]
     },
     "QuizResult": {
       "title": "QuizResult",
@@ -76,9 +106,15 @@
         "id": { "type": "string" },
         "quizId": { "type": "string" },
         "studentId": { "type": "string" },
+        "attemptNumber": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending_review", "graded"] },
+        "releasedToStudent": { "type": "boolean" },
         "score": { "type": "number" },
         "totalPoints": { "type": "number" },
         "percentage": { "type": "number" },
+        "teacherFeedback": { "type": "string" },
+        "gradedBy": { "type": "string" },
+        "gradedAt": { "type": "string" },
         "answers": { "type": "array" },
         "completedAt": { "type": "string" }
       },
@@ -166,6 +202,10 @@
     "/school_info/{infoId}": {
       "schema": { "$ref": "#/entities/SchoolInfo" },
       "description": "Institutional metadata and configurations"
+    },
+    "/question_bank/{itemId}": {
+      "schema": { "$ref": "#/entities/QuestionBankItem" },
+      "description": "Centralized shared question bank items for teachers and administrators"
     }
   }
 }

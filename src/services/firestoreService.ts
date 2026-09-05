@@ -21,6 +21,7 @@ import {
   TeacherComment,
   Announcement,
   SchoolInfo,
+  QuestionBankItem,
 } from '../types';
 
 export interface FirestoreDataSnapshot {
@@ -32,6 +33,7 @@ export interface FirestoreDataSnapshot {
   teacherComments: TeacherComment[];
   announcements: Announcement[];
   schoolInfo: SchoolInfo | null;
+  questionBank: QuestionBankItem[];
 }
 
 // Helpers to sanitize undefined values before saving to Firestore
@@ -59,6 +61,7 @@ export const firestoreService = {
       teacherComments: [],
       announcements: [],
       schoolInfo: null,
+      questionBank: [],
     };
 
     let isInitialBatchReady = false;
@@ -72,6 +75,7 @@ export const firestoreService = {
       'teacher_comments',
       'announcements',
       'school_info',
+      'question_bank',
     ];
 
     const notifyIfReady = () => {
@@ -191,6 +195,19 @@ export const firestoreService = {
       )
     );
 
+    // 9. Question Bank
+    unsubscribes.push(
+      onSnapshot(
+        collection(db, 'question_bank'),
+        (snapshot) => {
+          state.questionBank = snapshot.docs.map((d) => d.data() as QuestionBankItem);
+          collectionsLoaded.add('question_bank');
+          notifyIfReady();
+        },
+        (err) => console.error('Firestore question_bank subscription error:', err)
+      )
+    );
+
     return () => {
       unsubscribes.forEach((unsub) => unsub());
     };
@@ -207,6 +224,7 @@ export const firestoreService = {
       commentsSnap,
       announcementsSnap,
       schoolInfoSnap,
+      questionBankSnap,
     ] = await Promise.all([
       getDocs(collection(db, 'users')),
       getDocs(collection(db, 'classes')),
@@ -216,6 +234,7 @@ export const firestoreService = {
       getDocs(collection(db, 'teacher_comments')),
       getDocs(collection(db, 'announcements')),
       getDoc(doc(db, 'school_info', 'main')),
+      getDocs(collection(db, 'question_bank')),
     ]);
 
     return {
@@ -227,6 +246,7 @@ export const firestoreService = {
       teacherComments: commentsSnap.docs.map((d) => d.data() as TeacherComment),
       announcements: announcementsSnap.docs.map((d) => d.data() as Announcement),
       schoolInfo: schoolInfoSnap.exists() ? (schoolInfoSnap.data() as SchoolInfo) : null,
+      questionBank: questionBankSnap.docs.map((d) => d.data() as QuestionBankItem),
     };
   },
 
@@ -278,6 +298,7 @@ export const firestoreService = {
     teacherComments: TeacherComment[];
     announcements: Announcement[];
     schoolInfo: SchoolInfo;
+    questionBank?: QuestionBankItem[];
   }): Promise<boolean> {
     try {
       const usersSnap = await getDocs(collection(db, 'users'));
@@ -319,6 +340,30 @@ export const firestoreService = {
           const ref = doc(db, 'student_details', d.id);
           batch.set(ref, cleanDataForFirestore(d), { merge: true });
           writesCount++;
+        }
+      }
+
+      // Check Announcements
+      if (initialData.announcements && initialData.announcements.length > 0) {
+        const annSnap = await getDocs(collection(db, 'announcements'));
+        if (annSnap.empty) {
+          for (const a of initialData.announcements) {
+            const ref = doc(db, 'announcements', a.id);
+            batch.set(ref, cleanDataForFirestore(a), { merge: true });
+            writesCount++;
+          }
+        }
+      }
+
+      // Check Question Bank
+      if (initialData.questionBank && initialData.questionBank.length > 0) {
+        const qbSnap = await getDocs(collection(db, 'question_bank'));
+        if (qbSnap.empty) {
+          for (const item of initialData.questionBank) {
+            const ref = doc(db, 'question_bank', item.id);
+            batch.set(ref, cleanDataForFirestore(item), { merge: true });
+            writesCount++;
+          }
         }
       }
 
@@ -407,6 +452,29 @@ export const firestoreService = {
   async saveQuizResult(result: QuizResult): Promise<void> {
     const ref = doc(db, 'quiz_results', result.id);
     await setDoc(ref, cleanDataForFirestore(result), { merge: true });
+  },
+
+  async updateQuizResult(resultId: string, updates: Partial<QuizResult>): Promise<void> {
+    const ref = doc(db, 'quiz_results', resultId);
+    await setDoc(ref, cleanDataForFirestore(updates), { merge: true });
+  },
+
+  async saveQuestionBankItem(item: QuestionBankItem): Promise<void> {
+    const ref = doc(db, 'question_bank', item.id);
+    await setDoc(ref, cleanDataForFirestore(item), { merge: true });
+  },
+
+  async bulkSaveQuestionBankItems(items: QuestionBankItem[]): Promise<void> {
+    const batch = writeBatch(db);
+    for (const item of items) {
+      const ref = doc(db, 'question_bank', item.id);
+      batch.set(ref, cleanDataForFirestore(item), { merge: true });
+    }
+    await batch.commit();
+  },
+
+  async deleteQuestionBankItem(itemId: string): Promise<void> {
+    await deleteDoc(doc(db, 'question_bank', itemId));
   },
 
   async saveTeacherComment(comment: TeacherComment): Promise<void> {

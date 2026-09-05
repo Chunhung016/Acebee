@@ -6,6 +6,8 @@ import { formatWhatsAppCredentials } from '../../utils/credentialGenerator';
 import { AnnouncementImage } from '../AnnouncementImage';
 import { ImageLightboxModal } from '../ImageLightboxModal';
 import { normalizeImageUrl, compressImageFile } from '../../utils/imageUtils';
+import { QuestionBankView } from '../questions/QuestionBankView';
+import { AdminClassMarksView } from './AdminClassMarksView';
 import {
   Users,
   UserPlus,
@@ -15,6 +17,7 @@ import {
   Layers,
   Sparkles,
   Plus,
+  Award,
   Trash2,
   CheckCircle2,
   AlertCircle,
@@ -68,7 +71,9 @@ export const AdminDashboard: React.FC = () => {
     supabaseSyncInfo,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'school-info' | 'accounts' | 'binding' | 'announcements'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'school-info' | 'accounts' | 'binding' | 'announcements' | 'question-bank' | 'all-marks'
+  >('overview');
 
   // School Info State
   const [schoolName, setSchoolName] = useState(schoolInfo.name || '');
@@ -442,6 +447,32 @@ export const AdminDashboard: React.FC = () => {
         >
           <Megaphone className="w-4 h-4" />
           Public Announcements ({announcements.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('question-bank')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            activeTab === 'question-bank'
+              ? 'bg-blue-900 text-white shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+          id="admin-tab-question-bank"
+        >
+          <BookOpen className="w-4 h-4" />
+          Question Bank
+        </button>
+
+        <button
+          onClick={() => setActiveTab('all-marks')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            activeTab === 'all-marks'
+              ? 'bg-blue-900 text-white shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+          id="admin-tab-all-marks"
+        >
+          <Award className="w-4 h-4" />
+          All Class Marks & Feedback
         </button>
       </div>
 
@@ -1683,6 +1714,16 @@ export const AdminDashboard: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* TAB 6: QUESTION BANK */}
+      {activeTab === 'question-bank' && (
+        <QuestionBankView />
+      )}
+
+      {/* TAB 7: ALL CLASS MARKS & APPOINTED QUIZ FEEDBACK */}
+      {activeTab === 'all-marks' && (
+        <AdminClassMarksView />
       )}
 
       {/* EDIT CLASS MODAL */}

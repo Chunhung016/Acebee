@@ -11,6 +11,9 @@ import {
   Subject,
   CommentCategory,
   SchoolInfo,
+  QuestionBankItem,
+  QuizAnswerRecord,
+  QuizResultStatus,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -21,6 +24,7 @@ import {
   INITIAL_QUIZ_RESULTS,
   INITIAL_TEACHER_COMMENTS,
   INITIAL_SCHOOL_INFO,
+  INITIAL_QUESTION_BANK,
 } from '../data/initialData';
 import { generateUsername, generatePassword } from '../utils/credentialGenerator';
 import { testConnection } from '../lib/firebase';
@@ -44,6 +48,7 @@ interface AppContextType {
   quizzes: Quiz[];
   quizResults: QuizResult[];
   teacherComments: TeacherComment[];
+  questionBank: QuestionBankItem[];
   currentView: 'public' | 'dashboard';
   isLoginModalOpen: boolean;
   selectedQuizForTaking: Quiz | null;
@@ -62,6 +67,11 @@ interface AppContextType {
   login: (email: string, pass: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   switchUser: (userId: string) => void;
+
+  // Question Bank Operations (shared by Admin & Teachers)
+  saveQuestionBankItem: (item: Omit<QuestionBankItem, 'id' | 'createdAt' | 'createdBy' | 'createdByName'> & { id?: string }) => Promise<QuestionBankItem>;
+  bulkSaveQuestionBankItems: (items: Array<Omit<QuestionBankItem, 'id' | 'createdAt' | 'createdBy' | 'createdByName'> & { id?: string }>) => Promise<number>;
+  deleteQuestionBankItem: (id: string) => Promise<void>;
 
   // Admin Operations
   createAccount: (userData: Partial<User> & { fullName: string; role: UserRole }, extraDetails?: Partial<StudentDetail>) => User;
@@ -95,9 +105,17 @@ interface AppContextType {
   updateStudentDetail: (studentId: string, data: Partial<StudentDetail>) => void;
   postTeacherComment: (data: { studentId: string; parentId: string; category: CommentCategory; comment: string }) => TeacherComment;
   deleteTeacherComment: (id: string) => void;
+  updateQuizResult: (resultId: string, updates: Partial<QuizResult>) => Promise<void>;
+  releaseQuizMarks: (resultId: string, teacherFeedback?: string, questionScores?: { questionId: string; pointsAwarded: number; teacherComment?: string }[]) => Promise<void>;
 
   // Student Operations
-  submitQuizResult: (quizId: string, answers: { questionId: string; selectedOption: number; isCorrect: boolean }[], score: number, totalPoints: number) => void;
+  submitQuizResult: (
+    quizId: string,
+    answers: QuizAnswerRecord[],
+    score: number,
+    totalPoints: number,
+    options?: { attemptNumber?: number; status?: QuizResultStatus; releasedToStudent?: boolean; classId?: string }
+  ) => Promise<QuizResult | void>;
 
   // Parent Operations
   markCommentAsRead: (commentId: string) => void;
@@ -116,6 +134,7 @@ const STORAGE_KEYS = {
   QUIZZES: 'acebee_quizzes_v2',
   QUIZ_RESULTS: 'acebee_quiz_results_v2',
   TEACHER_COMMENTS: 'acebee_teacher_comments_v2',
+  QUESTION_BANK: 'acebee_question_bank_v2',
   CURRENT_USER: 'acebee_current_user_v2',
   SCHOOL_INFO: 'acebee_school_info_v2',
 };
@@ -170,7 +189,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
-    return saved ? JSON.parse(saved) : INITIAL_ANNOUNCEMENTS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.warn('Failed to parse cached announcements:', e);
+      }
+    }
+    return INITIAL_ANNOUNCEMENTS;
   });
 
   const [quizzes, setQuizzes] = useState<Quiz[]>(() => {
@@ -186,6 +213,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [teacherComments, setTeacherComments] = useState<TeacherComment[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.TEACHER_COMMENTS);
     return saved ? JSON.parse(saved) : INITIAL_TEACHER_COMMENTS;
+  });
+
+  const [questionBank, setQuestionBank] = useState<QuestionBankItem[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.QUESTION_BANK);
+    return saved ? JSON.parse(saved) : INITIAL_QUESTION_BANK;
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -224,6 +256,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.teacherComments) setTeacherComments(data.teacherComments);
       if (data.announcements) setAnnouncements(data.announcements);
       if (data.schoolInfo) setSchoolInfo(data.schoolInfo);
+      if (data.questionBank && data.questionBank.length > 0) setQuestionBank(data.questionBank);
       setLastSyncedAt(new Date().toLocaleTimeString());
     } catch (err: any) {
       console.error('Firestore sync error:', err);
@@ -246,6 +279,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teacherComments,
         announcements,
         schoolInfo,
+        questionBank: questionBank.length > 0 ? questionBank : INITIAL_QUESTION_BANK,
       });
       if (success) {
         setLastSyncedAt(new Date().toLocaleTimeString());
@@ -286,16 +320,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.teacherComments) {
         setTeacherComments(data.teacherComments);
       }
-      if (data.announcements) {
+      if (data.announcements && data.announcements.length > 0) {
         setAnnouncements(data.announcements);
       }
       if (data.schoolInfo) {
         setSchoolInfo(data.schoolInfo);
       }
+      if (data.questionBank) {
+        setQuestionBank(data.questionBank);
+      }
 
       setLastSyncedAt(new Date().toLocaleTimeString());
 
-      // On initial sync, if there are existing accounts stored locally in the browser
+      // On initial sync, if there are existing accounts or announcements stored locally in the browser
       // that are not yet in Firestore, automatically migrate them up to Firestore!
       if (!isInitialSyncDone.current) {
         isInitialSyncDone.current = true;
@@ -310,6 +347,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               firestoreService.bulkSaveUsers(missingUsers);
             }
           }
+
+          if (data.announcements.length === 0 && INITIAL_ANNOUNCEMENTS.length > 0) {
+            console.log('Seeding initial announcements to Firestore...');
+            INITIAL_ANNOUNCEMENTS.forEach((a) => firestoreService.saveAnnouncement(a));
+          }
         } catch (e) {
           console.warn('Local-to-cloud migration check note:', e);
         }
@@ -321,21 +363,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Cache to localStorage as local fallback
+  // Cache to localStorage as local fallback with quota error protection
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    try {
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    } catch (e) {
+      console.warn('localStorage quota warning for users', e);
+    }
   }, [users]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(classes));
+    try {
+      localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(classes));
+    } catch (e) {
+      console.warn('localStorage quota warning for classes', e);
+    }
   }, [classes]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.STUDENT_DETAILS, JSON.stringify(studentDetails));
+    try {
+      localStorage.setItem(STORAGE_KEYS.STUDENT_DETAILS, JSON.stringify(studentDetails));
+    } catch (e) {
+      console.warn('localStorage quota warning for student details', e);
+    }
   }, [studentDetails]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(announcements));
+    try {
+      localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(announcements));
+    } catch (e) {
+      console.warn('localStorage quota warning for announcements', e);
+    }
   }, [announcements]);
 
   useEffect(() => {
@@ -349,6 +407,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.TEACHER_COMMENTS, JSON.stringify(teacherComments));
   }, [teacherComments]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questionBank));
+  }, [questionBank]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SCHOOL_INFO, JSON.stringify(schoolInfo));
@@ -878,31 +940,144 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     firestoreService.deleteTeacherComment(id);
   };
 
+  // Question Bank Operations
+  const saveQuestionBankItem = async (
+    item: Omit<QuestionBankItem, 'id' | 'createdAt' | 'createdBy' | 'createdByName'> & { id?: string }
+  ): Promise<QuestionBankItem> => {
+    const id = item.id || `qb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const fullItem: QuestionBankItem = {
+      ...item,
+      id,
+      createdBy: currentUser?.id || 'admin',
+      createdByName: currentUser?.fullName || 'Academic Staff',
+      createdAt: new Date().toISOString(),
+    };
+    setQuestionBank((prev) => {
+      const idx = prev.findIndex((q) => q.id === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = fullItem;
+        return next;
+      }
+      return [fullItem, ...prev];
+    });
+    await firestoreService.saveQuestionBankItem(fullItem);
+    return fullItem;
+  };
+
+  const bulkSaveQuestionBankItems = async (
+    items: Array<Omit<QuestionBankItem, 'id' | 'createdAt' | 'createdBy' | 'createdByName'> & { id?: string }>
+  ): Promise<number> => {
+    const fullItems: QuestionBankItem[] = items.map((item, idx) => ({
+      ...item,
+      id: item.id || `qb-${Date.now().toString(36)}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+      createdBy: currentUser?.id || 'admin',
+      createdByName: currentUser?.fullName || 'Academic Staff',
+      createdAt: new Date().toISOString(),
+    }));
+    setQuestionBank((prev) => [...fullItems, ...prev]);
+    await firestoreService.bulkSaveQuestionBankItems(fullItems);
+    return fullItems.length;
+  };
+
+  const deleteQuestionBankItem = async (id: string): Promise<void> => {
+    setQuestionBank((prev) => prev.filter((item) => item.id !== id));
+    await firestoreService.deleteQuestionBankItem(id);
+  };
+
+  const updateQuizResult = async (resultId: string, updates: Partial<QuizResult>): Promise<void> => {
+    setQuizResults((prev) =>
+      prev.map((r) => (r.id === resultId ? { ...r, ...updates } : r))
+    );
+    await firestoreService.updateQuizResult(resultId, updates);
+  };
+
+  const releaseQuizMarks = async (
+    resultId: string,
+    teacherFeedback?: string,
+    questionScores?: { questionId: string; pointsAwarded: number; teacherComment?: string }[]
+  ): Promise<void> => {
+    const target = quizResults.find((r) => r.id === resultId);
+    if (!target) return;
+
+    let updatedAnswers = [...target.answers];
+    if (questionScores && questionScores.length > 0) {
+      const scoreMap = new Map(questionScores.map((s) => [s.questionId, s]));
+      updatedAnswers = updatedAnswers.map((ans) => {
+        const override = scoreMap.get(ans.questionId);
+        if (override) {
+          return {
+            ...ans,
+            pointsAwarded: override.pointsAwarded,
+            teacherComment: override.teacherComment || ans.teacherComment,
+            isCorrect: override.pointsAwarded > 0,
+          };
+        }
+        return ans;
+      });
+    }
+
+    const newScore = updatedAnswers.reduce(
+      (sum, a) => sum + (a.pointsAwarded ?? (a.isCorrect ? (a.maxPoints ?? 1) : 0)),
+      0
+    );
+    const newPercentage = target.totalPoints > 0 ? Number(((newScore / target.totalPoints) * 100).toFixed(1)) : 0;
+
+    const updates: Partial<QuizResult> = {
+      answers: updatedAnswers,
+      score: newScore,
+      percentage: newPercentage,
+      status: 'graded',
+      releasedToStudent: true,
+      teacherFeedback: teacherFeedback ?? target.teacherFeedback,
+      gradedBy: currentUser?.fullName || 'Teacher',
+      gradedAt: new Date().toISOString(),
+    };
+
+    setQuizResults((prev) =>
+      prev.map((r) => (r.id === resultId ? { ...r, ...updates } : r))
+    );
+    await firestoreService.updateQuizResult(resultId, updates);
+  };
+
   // Student Functions
-  const submitQuizResult = (
+  const submitQuizResult = async (
     quizId: string,
-    answers: { questionId: string; selectedOption: number; isCorrect: boolean }[],
+    answers: QuizAnswerRecord[],
     score: number,
-    totalPoints: number
-  ) => {
+    totalPoints: number,
+    options?: { attemptNumber?: number; status?: QuizResultStatus; releasedToStudent?: boolean; classId?: string }
+  ): Promise<QuizResult | void> => {
     if (!currentUser) return;
+    const targetQuiz = quizzes.find((q) => q.id === quizId);
+    const existingAttempts = quizResults.filter((r) => r.quizId === quizId && r.studentId === currentUser.id);
+    const attemptNumber = options?.attemptNumber || existingAttempts.length + 1;
+
+    // Marking mode logic:
+    // If quiz is manual marking mode, or has structure questions without preset score, default to pending_review
+    const isManualMode = targetQuiz?.markingMode === 'manual';
+    const status: QuizResultStatus = options?.status || (isManualMode ? 'pending_review' : 'graded');
+    const releasedToStudent = options?.releasedToStudent !== undefined ? options.releasedToStudent : !isManualMode;
+
     const percentage = totalPoints > 0 ? Number(((score / totalPoints) * 100).toFixed(1)) : 0;
     const newResult: QuizResult = {
-      id: `res-${Date.now().toString(36)}`,
+      id: `res-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
       quizId,
       studentId: currentUser.id,
+      classId: options?.classId || targetQuiz?.classId,
+      attemptNumber,
+      status,
+      releasedToStudent,
       score,
       totalPoints,
       percentage,
       answers,
       completedAt: new Date().toISOString(),
     };
-    // Replace if existed, otherwise append
-    setQuizResults((prev) => {
-      const filtered = prev.filter((r) => !(r.quizId === quizId && r.studentId === currentUser.id));
-      return [newResult, ...filtered];
-    });
-    firestoreService.saveQuizResult(newResult);
+
+    setQuizResults((prev) => [newResult, ...prev]);
+    await firestoreService.saveQuizResult(newResult);
+    return newResult;
   };
 
   // Parent Functions
@@ -964,6 +1139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       quizzes,
       quizResults,
       teacherComments,
+      questionBank,
       currentView,
       isLoginModalOpen,
       selectedQuizForTaking,
@@ -976,6 +1152,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       login,
       logout,
       switchUser,
+      saveQuestionBankItem,
+      bulkSaveQuestionBankItems,
+      deleteQuestionBankItem,
       createAccount,
       updateAccount,
       deleteAccount,
@@ -996,6 +1175,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateStudentDetail,
       postTeacherComment,
       deleteTeacherComment,
+      updateQuizResult,
+      releaseQuizMarks,
       submitQuizResult,
       markCommentAsRead,
       resetToDemoData,
@@ -1009,6 +1190,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       quizzes,
       quizResults,
       teacherComments,
+      questionBank,
       currentView,
       isLoginModalOpen,
       selectedQuizForTaking,

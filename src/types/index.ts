@@ -14,7 +14,18 @@ export const ACADEMIC_LEVELS = [
 
 export type AcademicLevel = (typeof ACADEMIC_LEVELS)[number] | string;
 
-export type Subject = 'Mathematics' | 'English' | 'Science' | 'Social Studies' | 'Art & Technology';
+export type Subject =
+  | 'Mathematics'
+  | 'English'
+  | 'Science'
+  | 'Social Studies'
+  | 'Art & Technology'
+  | 'Bahasa Melayu'
+  | 'History'
+  | 'Geography'
+  | 'Art'
+  | 'Physical Education'
+  | string;
 
 export interface User {
   id: string;
@@ -51,22 +62,67 @@ export interface StudentDetail {
   createdAt: string;
 }
 
+export type QuestionType = 'mcq' | 'structure' | 'fill_in_blank' | 'fill_blank' | 'matching';
+
+export interface MatchingPair {
+  id: string;
+  left: string;
+  right: string;
+}
+
 export interface QuizQuestion {
   id: string;
+  type?: QuestionType; // defaults to 'mcq'
   question: string;
-  options: string[];
-  correctAnswerIndex: number;
+  points?: number; // defaults to 1
+  options?: string[]; // for MCQ
+  correctAnswerIndex?: number; // for MCQ
+  modelAnswer?: string; // for Structure
+  guidelines?: string; // for Structure rubrics
+  wordLimit?: number;
+  acceptableAnswers?: string[]; // for Fill in Blank
+  caseSensitive?: boolean; // for Fill in Blank
+  matchingPairs?: MatchingPair[]; // for Matching
   explanation?: string;
 }
+
+export interface QuestionBankItem {
+  id: string;
+  type: QuestionType;
+  subject: Subject;
+  gradeLevel: string;
+  topic: string;
+  tags?: string[];
+  question: string;
+  points: number;
+  options?: string[];
+  correctAnswerIndex?: number;
+  modelAnswer?: string;
+  guidelines?: string;
+  wordLimit?: number;
+  acceptableAnswers?: string[];
+  caseSensitive?: boolean;
+  matchingPairs?: MatchingPair[];
+  explanation?: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+}
+
+export type MarkingMode = 'auto' | 'manual';
 
 export interface Quiz {
   id: string;
   classId: string;
+  assignedClassIds?: string[];
   teacherId: string;
   title: string;
   subject: Subject;
   description: string;
   timeLimitMinutes: number;
+  maxAttempts?: number; // 0 = unlimited, 1 = single attempt (default), 2, 3 etc.
+  markingMode?: MarkingMode; // 'auto' = auto-grades objective questions immediately, 'manual' = teacher reviews/releases
+  totalPoints?: number;
   questions: QuizQuestion[];
   dueDate: string;
   createdAt: string;
@@ -74,17 +130,34 @@ export interface Quiz {
 
 export interface QuizAnswerRecord {
   questionId: string;
-  selectedOption: number;
-  isCorrect: boolean;
+  type?: QuestionType;
+  selectedOption?: number; // for MCQ
+  textAnswer?: string; // for Structure & Fill in Blank
+  matchingAnswers?: Record<string, string>; // pairId -> selected right item for Matching
+  isCorrect?: boolean;
+  pointsAwarded?: number;
+  maxPoints?: number;
+  teacherComment?: string;
 }
+
+export type StudentAnswerRecord = QuizAnswerRecord;
+
+export type QuizResultStatus = 'pending_review' | 'graded';
 
 export interface QuizResult {
   id: string;
   quizId: string;
   studentId: string;
+  classId?: string;
+  attemptNumber?: number;
+  status?: QuizResultStatus;
+  releasedToStudent?: boolean;
   score: number;
   totalPoints: number;
   percentage: number;
+  teacherFeedback?: string;
+  gradedBy?: string;
+  gradedAt?: string;
   answers: QuizAnswerRecord[];
   completedAt: string;
 }

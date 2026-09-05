@@ -3,6 +3,25 @@
  */
 
 /**
+ * Extracts Google Drive file ID from various Drive URL formats.
+ */
+export function extractGoogleDriveId(url: string): string | null {
+  const match1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i);
+  if (match1 && match1[1]) return match1[1];
+
+  const match2 = url.match(/drive\.google\.com\/open\?(?:.*&)?id=([a-zA-Z0-9_-]+)/i);
+  if (match2 && match2[1]) return match2[1];
+
+  const match3 = url.match(/drive\.google\.com\/uc\?(?:.*&)?id=([a-zA-Z0-9_-]+)/i);
+  if (match3 && match3[1]) return match3[1];
+
+  const match4 = url.match(/drive\.usercontent\.google\.com\/download\?(?:.*&)?id=([a-zA-Z0-9_-]+)/i);
+  if (match4 && match4[1]) return match4[1];
+
+  return null;
+}
+
+/**
  * Normalizes user-pasted image URLs from common hosting services into direct image links.
  */
 export function normalizeImageUrl(rawUrl: string): string {
@@ -14,40 +33,72 @@ export function normalizeImageUrl(rawUrl: string): string {
     return url;
   }
 
-  // Google Drive sharing link conversion
-  // Pattern 1: https://drive.google.com/file/d/{FILE_ID}/view...
-  const gDriveMatch1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (gDriveMatch1 && gDriveMatch1[1]) {
-    return `https://drive.google.com/uc?export=view&id=${gDriveMatch1[1]}`;
-  }
-  // Pattern 2: https://drive.google.com/open?id={FILE_ID}
-  const gDriveMatch2 = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
-  if (gDriveMatch2 && gDriveMatch2[1]) {
-    return `https://drive.google.com/uc?export=view&id=${gDriveMatch2[1]}`;
+  // Upgrade insecure http: to https: for common CDNs to prevent mixed-content blocks
+  if (url.startsWith('http://')) {
+    url = url.replace(/^http:\/\//i, 'https://');
   }
 
-  // Dropbox shared link conversion (?dl=0 -> ?raw=1)
+  // Google Drive sharing link conversion
+  // Note: drive.google.com/uc?export=view is blocked/deprecated by Google in 2024.
+  // lh3.googleusercontent.com/d/{id} provides reliable, unblocked direct image embedding.
+  const driveId = extractGoogleDriveId(url);
+  if (driveId) {
+    return `https://lh3.googleusercontent.com/d/${driveId}`;
+  }
+
+  // GitHub repository file conversion:
+  // https://github.com/owner/repo/blob/main/path/to/img.png -> https://raw.githubusercontent.com/owner/repo/main/path/to/img.png
+  const githubMatch = url.match(/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/i);
+  if (githubMatch) {
+    return `https://raw.githubusercontent.com/${githubMatch[1]}/${githubMatch[2]}/${githubMatch[3]}/${githubMatch[4]}`;
+  }
+
+  // Dropbox shared link conversion
   if (url.includes('dropbox.com')) {
-    url = url.replace(/[?&]dl=0/, '');
-    if (url.includes('?')) {
-      url = `${url}&raw=1`;
-    } else {
-      url = `${url}?raw=1`;
-    }
+    // Replace domain with direct download domain
+    url = url.replace(/^(https?:\/\/)?(www\.)?dropbox\.com/i, 'https://dl.dropboxusercontent.com');
+    // Strip trailing dl parameters
+    url = url.replace(/[?&]dl=[01]/i, '');
     return url;
   }
 
-  // Imgur page link to direct image link: https://imgur.com/{ID} -> https://i.imgur.com/{ID}.jpg
-  const imgurMatch = url.match(/^https?:\/\/(?:www\.)?imgur\.com\/([a-zA-Z0-9]{5,10})$/);
+  // Imgur page link to direct image link:
+  // https://imgur.com/{ID} -> https://i.imgur.com/{ID}.jpg
+  const imgurMatch = url.match(/^https?:\/\/(?:www\.)?imgur\.com\/(?:gallery\/|a\/)?([a-zA-Z0-9]{5,10})(?:\.[a-zA-Z]{3,4})?$/i);
   if (imgurMatch && imgurMatch[1]) {
     return `https://i.imgur.com/${imgurMatch[1]}.jpg`;
   }
 
-  // Postimage page link helper: https://postimg.cc/{ID} warning/notice
-  // Direct postimg link is usually https://i.postimg.cc/{DIR}/{ID}.png
-  // If user pasted postimg.cc, preserve or guide
+  // Postimages direct image format check
+  const postimgMatch = url.match(/^https?:\/\/postimg\.cc\/([a-zA-Z0-9]+)$/i);
+  if (postimgMatch && postimgMatch[1]) {
+    return `https://i.postimg.cc/${postimgMatch[1]}/image.jpg`;
+  }
 
   return url;
+}
+
+/**
+ * Returns alternative fallback URLs for a given image link if the primary one fails to load.
+ */
+export function getAlternativeImageUrls(url: string): string[] {
+  if (!url || url.startsWith('data:')) return [];
+  const fallbacks: string[] = [];
+
+  const driveId = extractGoogleDriveId(url);
+  if (driveId) {
+    fallbacks.push(`https://drive.google.com/thumbnail?id=${driveId}&sz=w1600`);
+    fallbacks.push(`https://drive.usercontent.google.com/download?id=${driveId}&export=view`);
+    fallbacks.push(`https://drive.google.com/uc?export=view&id=${driveId}`);
+  }
+
+  if (url.includes('dropbox.com') || url.includes('dropboxusercontent.com')) {
+    if (!url.includes('raw=1')) {
+      fallbacks.push(url.includes('?') ? `${url}&raw=1` : `${url}?raw=1`);
+    }
+  }
+
+  return fallbacks;
 }
 
 /**
@@ -67,9 +118,9 @@ export function isValidImageUrl(url: string): boolean {
 
 /**
  * Resizes and compresses an uploaded image file into a base64 Data URL,
- * ensuring it stays within Firestore single document limits (< 800 KB).
+ * ensuring it stays well within Firestore (< 1MB) and browser localStorage (< 5MB total) quotas.
  */
-export function compressImageFile(file: File, maxDimension = 1200, quality = 0.85): Promise<string> {
+export function compressImageFile(file: File, maxDimension = 960, quality = 0.8): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
       reject(new Error('Selected file is not an image.'));
@@ -99,19 +150,16 @@ export function compressImageFile(file: File, maxDimension = 1200, quality = 0.8
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          // Fallback to raw reader result if 2D context unavailable
           resolve(reader.result as string);
           return;
         }
 
-        // Draw image smoothed
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Prefer WebP or JPEG for compression
-        const outputFormat = file.type === 'image/png' && file.size < 400000 ? 'image/png' : 'image/jpeg';
-        const dataUrl = canvas.toDataURL(outputFormat, quality);
+        // Compress to JPEG for compact flyer payloads
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
         resolve(dataUrl);
       };
 

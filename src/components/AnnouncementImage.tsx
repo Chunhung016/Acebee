@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Image as ImageIcon, ImageOff, Maximize2, ExternalLink, ZoomIn } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Image as ImageIcon, ImageOff, Maximize2, ExternalLink, ZoomIn, RefreshCw } from 'lucide-react';
+import { getAlternativeImageUrls } from '../utils/imageUtils';
 
 interface AnnouncementImageProps {
   src: string;
@@ -20,30 +21,66 @@ export const AnnouncementImage: React.FC<AnnouncementImageProps> = ({
   onEnlarge,
   showZoomButton = true,
 }) => {
+  const [currentSrc, setCurrentSrc] = useState(src);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [fallbackIndex, setFallbackIndex] = useState(0);
 
-  if (!src) return null;
+  // Sync state whenever the src prop updates
+  useEffect(() => {
+    setCurrentSrc(src);
+    setIsLoading(true);
+    setHasError(false);
+    setFallbackIndex(0);
+  }, [src]);
+
+  if (!src || !src.trim()) return null;
+
+  const handleImageError = () => {
+    const fallbacks = getAlternativeImageUrls(src);
+    if (fallbackIndex < fallbacks.length) {
+      setCurrentSrc(fallbacks[fallbackIndex]);
+      setFallbackIndex((prev) => prev + 1);
+    } else {
+      setIsLoading(false);
+      setHasError(true);
+    }
+  };
 
   if (hasError) {
     return (
       <div
-        className={`flex flex-col items-center justify-center bg-slate-100 border border-slate-200 text-slate-400 p-4 text-center select-none ${
-          variant === 'modal' ? 'h-52 rounded-xl' : variant === 'thumbnail' ? 'w-16 h-16 rounded-lg' : 'h-48 rounded-t-xl'
+        className={`flex flex-col items-center justify-center bg-slate-100/90 border border-slate-200 text-slate-400 p-4 text-center select-none ${
+          variant === 'modal' ? 'h-56 rounded-xl' : variant === 'thumbnail' ? 'w-16 h-16 rounded-lg' : 'h-48 sm:h-52 rounded-t-xl'
         } ${containerClassName}`}
       >
-        <ImageOff className="w-6 h-6 text-slate-400 mb-1" />
-        <span className="text-[11px] font-medium text-slate-500">Image Preview Unavailable</span>
-        {variant === 'modal' && (
-          <a
-            href={src}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 text-xs text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+        <ImageOff className="w-5 h-5 text-slate-400 mb-1" />
+        <span className="text-[11px] font-medium text-slate-600">Announcement Image</span>
+        <div className="flex items-center gap-2 mt-1.5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setHasError(false);
+              setIsLoading(true);
+              setCurrentSrc(src + (src.includes('?') ? '&' : '?') + `t=${Date.now()}`);
+            }}
+            className="text-[10px] text-blue-700 hover:text-blue-900 font-bold flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-xs"
           >
-            Try opening original link <ExternalLink className="w-3 h-3" />
-          </a>
-        )}
+            <RefreshCw className="w-2.5 h-2.5" /> Retry
+          </button>
+          {variant === 'modal' && (
+            <a
+              href={src}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 font-semibold"
+            >
+              Open Link <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          )}
+        </div>
       </div>
     );
   }
@@ -54,13 +91,10 @@ export const AnnouncementImage: React.FC<AnnouncementImageProps> = ({
       <div className={`relative w-16 h-16 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shrink-0 group ${containerClassName}`}>
         {isLoading && <div className="absolute inset-0 bg-slate-200 animate-pulse" />}
         <img
-          src={src}
+          src={currentSrc}
           alt={alt}
           onLoad={() => setIsLoading(false)}
-          onError={() => {
-            setIsLoading(false);
-            setHasError(true);
-          }}
+          onError={handleImageError}
           className={`w-full h-full object-cover transition-opacity duration-200 ${isLoading ? 'opacity-0' : 'opacity-100'} ${className}`}
           referrerPolicy="no-referrer"
           loading="lazy"
@@ -96,21 +130,21 @@ export const AnnouncementImage: React.FC<AnnouncementImageProps> = ({
         {/* Ambient blurred backdrop for aesthetic framing */}
         <div className="relative w-full flex items-center justify-center overflow-hidden min-h-[220px] max-h-[560px] bg-slate-950/5">
           <img
-            src={src}
+            src={currentSrc}
             alt=""
             aria-hidden="true"
             className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-20 scale-125 select-none pointer-events-none"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
           />
 
           <img
-            src={src}
+            src={currentSrc}
             alt={alt}
             onLoad={() => setIsLoading(false)}
-            onError={() => {
-              setIsLoading(false);
-              setHasError(true);
-            }}
+            onError={handleImageError}
             className={`relative z-10 w-full max-h-[560px] object-contain transition-all duration-300 ${
               isLoading ? 'opacity-0 scale-98' : 'opacity-100 scale-100'
             } ${className}`}
@@ -136,7 +170,7 @@ export const AnnouncementImage: React.FC<AnnouncementImageProps> = ({
               </button>
             )}
             <a
-              href={src}
+              href={currentSrc}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
@@ -166,22 +200,22 @@ export const AnnouncementImage: React.FC<AnnouncementImageProps> = ({
 
       {/* Ambient background blur duplicate so mixed aspect-ratio graphics seamlessly blend */}
       <img
-        src={src}
+        src={currentSrc}
         alt=""
         aria-hidden="true"
         className="absolute inset-0 w-full h-full object-cover blur-xl opacity-25 scale-120 pointer-events-none select-none"
         referrerPolicy="no-referrer"
+        onError={(e) => {
+          (e.target as HTMLElement).style.display = 'none';
+        }}
       />
 
       {/* Primary crisp uncropped graphic */}
       <img
-        src={src}
+        src={currentSrc}
         alt={alt}
         onLoad={() => setIsLoading(false)}
-        onError={() => {
-          setIsLoading(false);
-          setHasError(true);
-        }}
+        onError={handleImageError}
         className={`relative z-10 w-full h-full object-contain p-1.5 transition-transform duration-300 group-hover:scale-103 ${
           isLoading ? 'opacity-0' : 'opacity-100'
         } ${className}`}
