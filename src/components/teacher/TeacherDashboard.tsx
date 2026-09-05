@@ -8,6 +8,7 @@ import {
   StudentDetail,
   QuestionType,
   MatchingPair,
+  QuestionBankItem,
 } from '../../types';
 import { UserAvatar } from '../common/UserAvatar';
 import { QuestionBankView } from '../questions/QuestionBankView';
@@ -302,6 +303,38 @@ export const TeacherDashboard: React.FC = () => {
     if (imported.some((q) => q.type === 'structure')) {
       setQuizMarkingMode('manual');
     }
+  };
+
+  const handleCreateQuizFromQuestionBank = (selected: QuestionBankItem[]) => {
+    if (selected.length === 0) return;
+    const converted: QuizQuestion[] = selected.map((item, idx) => ({
+      id: `q-bank-${Date.now().toString(36)}-${idx}`,
+      type: item.type,
+      difficulty: item.difficulty,
+      topic: item.topic,
+      question: item.question,
+      points: item.points || 1,
+      imageUrl: item.imageUrl,
+      options: item.options || [],
+      correctAnswerIndex: item.correctAnswerIndex ?? 0,
+      modelAnswer: item.modelAnswer,
+      guidelines: item.guidelines,
+      wordLimit: item.wordLimit,
+      acceptableAnswers: item.acceptableAnswers,
+      caseSensitive: item.caseSensitive,
+      matchingPairs: item.matchingPairs,
+      explanation: item.explanation,
+    }));
+    setQuestions(converted);
+    if (selected[0]?.subject) {
+      setQuizSubject(selected[0].subject);
+    }
+    const topicTitle = selected[0]?.topic ? ` - ${selected[0].topic}` : '';
+    setQuizTitle(`${selected[0]?.subject || 'Assessment'} Quiz${topicTitle}`);
+    if (converted.some((q) => q.type === 'structure')) {
+      setQuizMarkingMode('manual');
+    }
+    setActiveTab('quizzes');
   };
 
   // Handle Create Quiz Submit
@@ -1882,7 +1915,9 @@ export const TeacherDashboard: React.FC = () => {
       )}
 
       {/* TAB 5: QUESTION BANK */}
-      {activeTab === 'questions' && <QuestionBankView />}
+      {activeTab === 'questions' && (
+        <QuestionBankView onCreateQuizFromQuestions={handleCreateQuizFromQuestionBank} />
+      )}
 
       {/* TAB 6: MANUAL GRADING & REVIEWS */}
       {activeTab === 'grading' && <TeacherGradingView currentClass={currentClass} />}

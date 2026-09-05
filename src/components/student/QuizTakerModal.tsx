@@ -750,6 +750,35 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                           </div>
                         )}
 
+                        {q.type === 'structure' && (
+                          <div className="text-slate-600 space-y-1.5">
+                            <div>
+                              Your written response:{' '}
+                              <strong>{ans?.textAnswer ? <MathText text={ans.textAnswer} /> : <span className="italic text-slate-400">None</span>}</strong>
+                            </div>
+                            {ans?.studentAttachmentUrl && (
+                              <div className="pt-1">
+                                <span className="text-[11px] font-semibold text-slate-700 block mb-1">
+                                  Your submitted photo/calculation:
+                                </span>
+                                <div className="max-w-[200px] rounded border border-slate-200 p-1 bg-white">
+                                  <img
+                                    src={ans.studentAttachmentUrl}
+                                    alt="Submitted work"
+                                    className="max-h-[120px] object-contain rounded"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            {q.modelAnswer && (
+                              <div className="text-purple-800 text-[11px] bg-purple-50 p-2 rounded-lg border border-purple-100">
+                                <strong>Marking Scheme:</strong> <MathText text={q.modelAnswer} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {q.explanation && (
                           <div className="text-slate-600 text-[11px] pt-1.5 border-t border-slate-200/50 flex items-start gap-1">
                             <span className="shrink-0">💡</span>
@@ -786,7 +815,9 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                   const hasAnswer =
                     (!q.type || q.type === 'mcq')
                       ? mcqAnswers[q.id] !== undefined
-                      : q.type === 'structure' || q.type === 'fill_in_blank'
+                      : q.type === 'structure'
+                      ? Boolean(textAnswers[q.id]?.trim() || studentAttachments[q.id]?.trim())
+                      : q.type === 'fill_in_blank'
                       ? Boolean(textAnswers[q.id]?.trim())
                       : Object.keys(matchingAnswers[q.id] || {}).length > 0;
 

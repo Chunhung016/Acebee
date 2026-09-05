@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Clock,
   Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 
 interface ManualMarkingModalProps {
@@ -39,6 +40,7 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
   const [overallFeedback, setOverallFeedback] = useState<string>(result.teacherFeedback || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (result) {
@@ -288,10 +290,23 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
 
                     {answerRecord?.studentAttachmentUrl && (
                       <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-1.5">
-                        <span className="text-[10px] font-bold text-purple-950 uppercase tracking-wider block">
-                          Student's Uploaded Attachment / Calculation Photo:
-                        </span>
-                        <div className="rounded-lg border border-purple-200/60 overflow-hidden bg-white max-h-[240px] flex items-center justify-center p-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-purple-950 uppercase tracking-wider block">
+                            Student's Uploaded Attachment / Calculation Photo:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setZoomedImage(answerRecord.studentAttachmentUrl!)}
+                            className="text-[11px] font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-1 cursor-pointer"
+                          >
+                            <ExternalLink className="w-3 h-3" /> View Full Image
+                          </button>
+                        </div>
+                        <div
+                          onClick={() => setZoomedImage(answerRecord.studentAttachmentUrl!)}
+                          className="rounded-lg border border-purple-200/60 overflow-hidden bg-white max-h-[240px] flex items-center justify-center p-1 cursor-zoom-in hover:opacity-95 transition-opacity"
+                          title="Click to zoom in"
+                        >
                           <img
                             src={answerRecord.studentAttachmentUrl}
                             alt="Student handwritten work attachment"
@@ -420,6 +435,30 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Lightbox Image Preview Modal */}
+      {zoomedImage && (
+        <div
+          onClick={() => setZoomedImage(null)}
+          className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
+        >
+          <div className="relative max-w-5xl max-h-[90vh] flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => setZoomedImage(null)}
+              className="absolute -top-10 right-0 text-white hover:text-slate-300 font-bold text-xs flex items-center gap-1 bg-white/20 px-3 py-1 rounded-full cursor-pointer"
+            >
+              <X className="w-4 h-4" /> Close
+            </button>
+            <img
+              src={zoomedImage}
+              alt="Enlarged student work"
+              className="max-h-[85vh] max-w-full object-contain rounded-xl shadow-2xl bg-white"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
