@@ -34,6 +34,7 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
 }) => {
   const [markdownText, setMarkdownText] = useState<string>(SAMPLE_MARKDOWN_TEMPLATES.ALL_TYPES);
   const [copiedTemplate, setCopiedTemplate] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
 
   const parseResult = useMemo(() => {
     return parseMarkdownQuestions(markdownText, defaultSubject, defaultGrade);
@@ -54,8 +55,8 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-1.5 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl border border-slate-200 max-w-5xl w-full h-[95vh] sm:h-auto max-h-[96vh] sm:max-h-[92vh] flex flex-col overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-3">
@@ -130,10 +131,43 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
           )}
         </div>
 
+        {/* Mobile Tabs Switcher */}
+        <div className="flex border-b border-slate-200 lg:hidden bg-slate-50">
+          <button
+            type="button"
+            onClick={() => setActiveTab('editor')}
+            className={`flex-1 py-3 text-center text-xs font-bold border-b-2 transition-all ${
+              activeTab === 'editor'
+                ? 'border-blue-600 text-blue-700 bg-white font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Edit Markdown
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('preview')}
+            className={`flex-1 py-3 text-center text-xs font-bold border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'preview'
+                ? 'border-blue-600 text-blue-700 bg-white font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Live Preview
+            <span
+              className={`px-1.5 py-0.5 text-[10px] rounded-full font-bold ${
+                parseResult.questions.length > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+              }`}
+            >
+              {parseResult.questions.length}
+            </span>
+          </button>
+        </div>
+
         {/* Content Body: Split Screen (Editor & Live Parsed Preview) */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 overflow-hidden min-h-[380px]">
           {/* Left Column: Markdown Editor */}
-          <div className="flex flex-col p-4 bg-white overflow-hidden gap-2">
+          <div className={`flex flex-col p-4 bg-white overflow-hidden gap-2 ${activeTab === 'editor' ? 'flex' : 'hidden lg:flex'}`}>
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
                 Markdown Key-In Editor
@@ -155,7 +189,7 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
               value={markdownText}
               onChange={(e) => setMarkdownText(e.target.value)}
               placeholder="Paste or type markdown here... (e.g. ### MCQ | Mathematics | Year 5 | 2 pts)"
-              className="flex-1 w-full p-3 font-mono text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none resize-none leading-relaxed transition-all"
+              className="flex-1 w-full min-h-[280px] lg:min-h-0 p-3 font-mono text-base lg:text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none resize-none leading-relaxed transition-all"
             />
             <div className="mt-3 p-2.5 bg-blue-50/70 rounded-lg border border-blue-100 text-[11px] text-blue-900 leading-normal flex items-start gap-2">
               <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
@@ -176,7 +210,7 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
           </div>
 
           {/* Right Column: Live Parsed Preview */}
-          <div className="flex flex-col p-4 bg-slate-50 overflow-hidden">
+          <div className={`flex flex-col p-4 bg-slate-50 overflow-hidden ${activeTab === 'preview' ? 'flex' : 'hidden lg:flex'}`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
