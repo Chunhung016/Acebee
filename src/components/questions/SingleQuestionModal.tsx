@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { QuestionBankItem, QuestionType, Subject, MatchingPair, QuestionDifficulty } from '../../types';
 import { MathToolbar, MathLivePreview, MathText } from '../common/MathRenderer';
 import { getSubjectsForLevel } from '../../utils/subjectHelper';
+import { removeDollarDelimiters } from '../../utils/mathParser';
 import {
   X,
   Plus,
@@ -188,27 +189,35 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
       difficulty,
       topic: topic.trim() || 'General',
       tags: parsedTags,
-      question: question.trim(),
+      question: removeDollarDelimiters(question.trim()),
       imageUrl: imageUrl.trim() || undefined,
       points: Number(points) || 1,
-      explanation: explanation.trim() || undefined,
+      explanation: explanation.trim() ? removeDollarDelimiters(explanation.trim()) : undefined,
     };
 
     if (type === 'mcq') {
-      payload.options = options.map((o) => o.trim()).filter(Boolean);
+      payload.options = options
+        .map((o) => removeDollarDelimiters(o.trim()))
+        .filter(Boolean);
       payload.correctAnswerIndex = correctAnswerIndex;
     } else if (type === 'structure') {
-      payload.modelAnswer = modelAnswer.trim() || undefined;
-      payload.guidelines = guidelines.trim() || undefined;
+      payload.modelAnswer = modelAnswer.trim() ? removeDollarDelimiters(modelAnswer.trim()) : undefined;
+      payload.guidelines = guidelines.trim() ? removeDollarDelimiters(guidelines.trim()) : undefined;
       payload.wordLimit = wordLimit ? Number(wordLimit) : undefined;
     } else if (type === 'fill_in_blank') {
       payload.acceptableAnswers = acceptableAnswersText
         .split(',')
-        .map((a) => a.trim())
+        .map((a) => removeDollarDelimiters(a.trim()))
         .filter(Boolean);
       payload.caseSensitive = caseSensitive;
     } else if (type === 'matching') {
-      payload.matchingPairs = matchingPairs.filter((p) => p.left.trim() && p.right.trim());
+      payload.matchingPairs = matchingPairs
+        .filter((p) => p.left.trim() && p.right.trim())
+        .map((p) => ({
+          ...p,
+          left: removeDollarDelimiters(p.left.trim()),
+          right: removeDollarDelimiters(p.right.trim()),
+        }));
     }
 
     onSave(payload);

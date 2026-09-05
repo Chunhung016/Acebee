@@ -1,15 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getSubjectsForLevel } from '../../utils/subjectHelper';
-import {
-  Subject,
-  CommentCategory,
-  QuizQuestion,
-  StudentDetail,
-  QuestionType,
-  MatchingPair,
-  QuestionBankItem,
-} from '../../types';
+import { QuestionBankItem, QuizQuestion, Subject, StudentDetail, QuestionType, MatchingPair, CommentCategory } from '../../types';
+import { removeDollarDelimiters } from '../../utils/mathParser';
 import { UserAvatar } from '../common/UserAvatar';
 import { QuestionBankView } from '../questions/QuestionBankView';
 import { QuestionBankPickerModal } from '../questions/QuestionBankPickerModal';
@@ -312,18 +305,20 @@ export const TeacherDashboard: React.FC = () => {
       type: item.type,
       difficulty: item.difficulty,
       topic: item.topic,
-      question: item.question,
+      question: removeDollarDelimiters(item.question),
       points: item.points || 1,
       imageUrl: item.imageUrl,
-      options: item.options || [],
+      options: item.options ? item.options.map(removeDollarDelimiters) : [],
       correctAnswerIndex: item.correctAnswerIndex ?? 0,
-      modelAnswer: item.modelAnswer,
-      guidelines: item.guidelines,
+      modelAnswer: item.modelAnswer ? removeDollarDelimiters(item.modelAnswer) : undefined,
+      guidelines: item.guidelines ? removeDollarDelimiters(item.guidelines) : undefined,
       wordLimit: item.wordLimit,
-      acceptableAnswers: item.acceptableAnswers,
+      acceptableAnswers: item.acceptableAnswers ? item.acceptableAnswers.map(removeDollarDelimiters) : undefined,
       caseSensitive: item.caseSensitive,
-      matchingPairs: item.matchingPairs,
-      explanation: item.explanation,
+      matchingPairs: item.matchingPairs
+        ? item.matchingPairs.map((p) => ({ id: p.id, left: removeDollarDelimiters(p.left), right: removeDollarDelimiters(p.right) }))
+        : undefined,
+      explanation: item.explanation ? removeDollarDelimiters(item.explanation) : undefined,
     }));
     setQuestions(converted);
     if (selected[0]?.subject) {
@@ -343,8 +338,23 @@ export const TeacherDashboard: React.FC = () => {
     const targetClassId = quizClassId || currentClass?.id;
     if (!targetClassId) return;
 
-    // Filter valid questions
-    const validQuestions = questions.filter((q) => q.question.trim().length > 0);
+    // Filter and sanitize valid questions
+    const validQuestions = questions
+      .filter((q) => q.question.trim().length > 0)
+      .map((q) => ({
+        ...q,
+        question: removeDollarDelimiters(q.question),
+        options: q.options?.map(removeDollarDelimiters),
+        modelAnswer: q.modelAnswer ? removeDollarDelimiters(q.modelAnswer) : undefined,
+        guidelines: q.guidelines ? removeDollarDelimiters(q.guidelines) : undefined,
+        acceptableAnswers: q.acceptableAnswers?.map(removeDollarDelimiters),
+        matchingPairs: q.matchingPairs?.map((p) => ({
+          ...p,
+          left: removeDollarDelimiters(p.left),
+          right: removeDollarDelimiters(p.right),
+        })),
+        explanation: q.explanation ? removeDollarDelimiters(q.explanation) : undefined,
+      }));
     if (validQuestions.length === 0) {
       alert('Please add at least one valid question.');
       return;

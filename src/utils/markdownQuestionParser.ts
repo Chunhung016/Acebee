@@ -1,5 +1,6 @@
 import { QuestionType, Subject, QuestionDifficulty } from '../types';
 import { ALL_ACEBEE_SUBJECTS } from './subjectHelper';
+import { removeDollarDelimiters } from './mathParser';
 
 export interface ParsedQuestionDraft {
   type: QuestionType;
@@ -53,9 +54,9 @@ export function parseMarkdownQuestions(
   // Normalize line endings
   const cleanText = markdownText.replace(/\r\n/g, '\n').trim();
 
-  // Split question blocks flexibly by header markers (###, ##, #), divider lines (---, ===), or blank lines followed by question/type markers
+  // Split question blocks flexibly by header markers (###, ##, #), divider lines (---, ===), or question numbering (1., 2), Q1, Question 1)
   const rawBlocks = cleanText
-    .split(/\n+(?=(?:#{1,4}\s+|[-=_]{3,}|(?:MCQ|Structure|Structured|FillInBlank|Fill-in-the-blank|Blank|Matching|Match|Q\d+|Question\s*\d+)))/gi)
+    .split(/\n+(?=(?:#{1,4}\s+|[-=_]{3,}|\b\d+[\.\)]\s+|(?:Q|Question)\s*\d+[\.\:\)]?|(?:MCQ|Structure|Structured|FillInBlank|Fill-in-the-blank|Blank|Matching|Match)\b))/gi)
     .map((b) => b.trim())
     .filter((b) => b.length > 0);
 
@@ -123,6 +124,14 @@ export function parseMarkdownQuestions(
               topic = p;
             }
           });
+        }
+      } else {
+        // If there is no explicit header, the first line is the question text!
+        // Check if it starts with numbering like "1. ", "1) ", "Q1: " and strip it from the prompt
+        const numPrefixMatch = firstLine.match(/^(?:\d+[\.\)]|(?:Q|Question)\s*\d+[\.\:\)]?)\s*(.+)$/i);
+        if (numPrefixMatch) {
+          startIndex = 1;
+          questionLines.push(numPrefixMatch[1].trim());
         }
       }
 
@@ -218,9 +227,9 @@ export function parseMarkdownQuestions(
           continue;
         }
 
-        // Letter or Number options: e.g. "A) Option", "A. Option", "1) Option", "- A) Option", "* A. Option"
-        const letterOptionMatch = line.match(/^(?:[-*]\s*)?([A-Ea-e1-5])[\).]\s*(.*)$/);
-        if (letterOptionMatch) {
+        // Letter or Number options: e.g. "A) Option", "A. Option", "(A) Option", "1) Option", "- A) Option", "* A. Option"
+        const letterOptionMatch = line.match(/^(?:[-*]\s*)?\(?([A-Ea-e1-5])\)?[\).]\s*(.*)$/);
+        if (letterOptionMatch && letterOptionMatch[2].trim().length > 0) {
           type = 'mcq';
           let optText = letterOptionMatch[2].trim();
 
@@ -235,16 +244,26 @@ export function parseMarkdownQuestions(
           continue;
         }
 
-        // Correct Answer line for options: e.g. "Answer: B" or "Correct: C" or "Ans: 2"
-        const explicitAnswerMatch = line.match(/^(?:Answer|Correct|Key|Ans)\s*:\s*([A-Ea-e1-5])/i);
+        // Correct Answer line for options: e.g. "Answer: B", "Ans: C", "Correct: A", "Answer: 2"
+        const explicitAnswerMatch = line.match(/^(?:Answer|Correct\s*Answer|Correct|Key|Ans)\s*[:=]\s*(.+)$/i);
         if (explicitAnswerMatch) {
-          const char = explicitAnswerMatch[1].toUpperCase();
-          if (['A', 'B', 'C', 'D', 'E'].includes(char)) {
-            correctAnswerIndex = char.charCodeAt(0) - 65;
+          const rawAns = explicitAnswerMatch[1].trim();
+          const singleCharMatch = rawAns.match(/^([A-Ea-e1-5])\b/);
+          if (singleCharMatch) {
+            const char = singleCharMatch[1].toUpperCase();
+            if (['A', 'B', 'C', 'D', 'E'].includes(char)) {
+              correctAnswerIndex = char.charCodeAt(0) - 65;
+            } else {
+              const num = parseInt(char, 10);
+              if (!isNaN(num) && num > 0) {
+                correctAnswerIndex = num - 1;
+              }
+            }
           } else {
-            const num = parseInt(char, 10);
-            if (!isNaN(num) && num > 0) {
-              correctAnswerIndex = num - 1;
+            // Check if answer line directly matches one of the options
+            const matchedIdx = options.findIndex((opt) => opt.toLowerCase() === rawAns.toLowerCase());
+            if (matchedIdx >= 0) {
+              correctAnswerIndex = matchedIdx;
             }
           }
           continue;
@@ -313,20 +332,26 @@ export function parseMarkdownQuestions(
       result.questions.push({
         type,
         difficulty,
-        question: questionText,
+        question: removeDollarDelimiters(questionText),
         points: points || 1,
         subject,
         gradeLevel,
         topic: topic || 'General',
         imageUrl: imageUrl || undefined,
-        options: type === 'mcq' ? options : undefined,
+        options: type === 'mcq' ? options.map(removeDollarDelimiters) : undefined,
         correctAnswerIndex: type === 'mcq' ? correctAnswerIndex : undefined,
-        modelAnswer: type === 'structure' ? modelAnswer : undefined,
-        guidelines: type === 'structure' ? guidelines : undefined,
-        acceptableAnswers: type === 'fill_in_blank' ? acceptableAnswers : undefined,
+        modelAnswer: type === 'structure' && modelAnswer ? removeDollarDelimiters(modelAnswer) : undefined,
+        guidelines: type === 'structure' && guidelines ? removeDollarDelimiters(guidelines) : undefined,
+        acceptableAnswers: type === 'fill_in_blank' && acceptableAnswers.length > 0 ? acceptableAnswers.map(removeDollarDelimiters) : undefined,
         caseSensitive: type === 'fill_in_blank' ? caseSensitive : undefined,
-        matchingPairs: type === 'matching' ? matchingPairs : undefined,
-        explanation: explanation || undefined,
+        matchingPairs: type === 'matching' && matchingPairs.length > 0
+          ? matchingPairs.map((p) => ({
+              id: p.id,
+              left: removeDollarDelimiters(p.left),
+              right: removeDollarDelimiters(p.right),
+            }))
+          : undefined,
+        explanation: explanation ? removeDollarDelimiters(explanation) : undefined,
       });
     } catch (err: any) {
       result.errors.push(`Item #${index + 1}: Parsing error - ${err?.message || 'Invalid syntax'}`);

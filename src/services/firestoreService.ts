@@ -36,21 +36,31 @@ export interface FirestoreDataSnapshot {
   questionBank: QuestionBankItem[];
 }
 
-// Helpers to sanitize undefined values before saving to Firestore
-const cleanDataForFirestore = <T extends Record<string, any>>(data: T): Record<string, any> => {
-  const result: Record<string, any> = {};
-  for (const key of Object.keys(data)) {
-    const val = data[key];
-    if (val !== undefined) {
-      result[key] = val;
-    }
+// Deep recursive sanitizer to remove undefined values at all levels before saving to Firestore
+export const cleanDataForFirestore = <T>(data: T): T => {
+  if (data === null || data === undefined) {
+    return null as any;
   }
-  return result;
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => cleanDataForFirestore(item)) as any;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data as Record<string, any>)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanDataForFirestore(value);
+      }
+    }
+    return cleaned as any;
+  }
+  return data;
 };
 
 export const firestoreService = {
   // --- REAL-TIME SUBSCRIPTION ---
-  subscribeAll(onUpdate: (data: FirestoreDataSnapshot) => void): () => void {
+  subscribeAll(onUpdate: (data: FirestoreDataSnapshot, collectionName?: string) => void): () => void {
     const unsubscribes: Unsubscribe[] = [];
     const state: FirestoreDataSnapshot = {
       users: [],
@@ -64,28 +74,12 @@ export const firestoreService = {
       questionBank: [],
     };
 
-    let isInitialBatchReady = false;
-    const collectionsLoaded = new Set<string>();
-    const expectedCollections = [
-      'users',
-      'classes',
-      'student_details',
-      'quizzes',
-      'quiz_results',
-      'teacher_comments',
-      'announcements',
-      'school_info',
-      'question_bank',
-    ];
-
-    const notifyIfReady = () => {
-      if (!isInitialBatchReady) {
-        if (expectedCollections.every((c) => collectionsLoaded.has(c))) {
-          isInitialBatchReady = true;
-          onUpdate({ ...state });
-        }
-      } else {
-        onUpdate({ ...state });
+    // Emit updates immediately for real-time reactivity
+    const emit = (collectionName?: string) => {
+      try {
+        onUpdate({ ...state }, collectionName);
+      } catch (err) {
+        console.warn(`Error in onUpdate for collection ${collectionName}:`, err);
       }
     };
 
@@ -95,10 +89,9 @@ export const firestoreService = {
         collection(db, 'users'),
         (snapshot) => {
           state.users = snapshot.docs.map((d) => d.data() as User);
-          collectionsLoaded.add('users');
-          notifyIfReady();
+          emit('users');
         },
-        (err) => console.error('Firestore users subscription error:', err)
+        (err) => console.warn('Firestore users subscription notice:', err)
       )
     );
 
@@ -108,10 +101,9 @@ export const firestoreService = {
         collection(db, 'classes'),
         (snapshot) => {
           state.classes = snapshot.docs.map((d) => d.data() as SchoolClass);
-          collectionsLoaded.add('classes');
-          notifyIfReady();
+          emit('classes');
         },
-        (err) => console.error('Firestore classes subscription error:', err)
+        (err) => console.warn('Firestore classes subscription notice:', err)
       )
     );
 
@@ -121,23 +113,21 @@ export const firestoreService = {
         collection(db, 'student_details'),
         (snapshot) => {
           state.studentDetails = snapshot.docs.map((d) => d.data() as StudentDetail);
-          collectionsLoaded.add('student_details');
-          notifyIfReady();
+          emit('student_details');
         },
-        (err) => console.error('Firestore student_details subscription error:', err)
+        (err) => console.warn('Firestore student_details subscription notice:', err)
       )
     );
 
-    // 4. Quizzes
+    // 4. Quizzes (Immediate push when teacher creates or modifies quizzes)
     unsubscribes.push(
       onSnapshot(
         collection(db, 'quizzes'),
         (snapshot) => {
           state.quizzes = snapshot.docs.map((d) => d.data() as Quiz);
-          collectionsLoaded.add('quizzes');
-          notifyIfReady();
+          emit('quizzes');
         },
-        (err) => console.error('Firestore quizzes subscription error:', err)
+        (err) => console.warn('Firestore quizzes subscription notice:', err)
       )
     );
 
@@ -147,10 +137,9 @@ export const firestoreService = {
         collection(db, 'quiz_results'),
         (snapshot) => {
           state.quizResults = snapshot.docs.map((d) => d.data() as QuizResult);
-          collectionsLoaded.add('quiz_results');
-          notifyIfReady();
+          emit('quiz_results');
         },
-        (err) => console.error('Firestore quiz_results subscription error:', err)
+        (err) => console.warn('Firestore quiz_results subscription notice:', err)
       )
     );
 
@@ -160,10 +149,9 @@ export const firestoreService = {
         collection(db, 'teacher_comments'),
         (snapshot) => {
           state.teacherComments = snapshot.docs.map((d) => d.data() as TeacherComment);
-          collectionsLoaded.add('teacher_comments');
-          notifyIfReady();
+          emit('teacher_comments');
         },
-        (err) => console.error('Firestore teacher_comments subscription error:', err)
+        (err) => console.warn('Firestore teacher_comments subscription notice:', err)
       )
     );
 
@@ -173,10 +161,9 @@ export const firestoreService = {
         collection(db, 'announcements'),
         (snapshot) => {
           state.announcements = snapshot.docs.map((d) => d.data() as Announcement);
-          collectionsLoaded.add('announcements');
-          notifyIfReady();
+          emit('announcements');
         },
-        (err) => console.error('Firestore announcements subscription error:', err)
+        (err) => console.warn('Firestore announcements subscription notice:', err)
       )
     );
 
@@ -188,10 +175,9 @@ export const firestoreService = {
           if (snapshot.exists()) {
             state.schoolInfo = snapshot.data() as SchoolInfo;
           }
-          collectionsLoaded.add('school_info');
-          notifyIfReady();
+          emit('school_info');
         },
-        (err) => console.error('Firestore school_info subscription error:', err)
+        (err) => console.warn('Firestore school_info subscription notice:', err)
       )
     );
 
@@ -201,10 +187,9 @@ export const firestoreService = {
         collection(db, 'question_bank'),
         (snapshot) => {
           state.questionBank = snapshot.docs.map((d) => d.data() as QuestionBankItem);
-          collectionsLoaded.add('question_bank');
-          notifyIfReady();
+          emit('question_bank');
         },
-        (err) => console.error('Firestore question_bank subscription error:', err)
+        (err) => console.warn('Firestore question_bank subscription notice:', err)
       )
     );
 
@@ -363,6 +348,30 @@ export const firestoreService = {
           for (const item of initialData.questionBank) {
             const ref = doc(db, 'question_bank', item.id);
             batch.set(ref, cleanDataForFirestore(item), { merge: true });
+            writesCount++;
+          }
+        }
+      }
+
+      // Check Quizzes
+      if (initialData.quizzes && initialData.quizzes.length > 0) {
+        const quizzesSnap = await getDocs(collection(db, 'quizzes'));
+        if (quizzesSnap.empty) {
+          for (const q of initialData.quizzes) {
+            const ref = doc(db, 'quizzes', q.id);
+            batch.set(ref, cleanDataForFirestore(q), { merge: true });
+            writesCount++;
+          }
+        }
+      }
+
+      // Check Quiz Results
+      if (initialData.quizResults && initialData.quizResults.length > 0) {
+        const resultsSnap = await getDocs(collection(db, 'quiz_results'));
+        if (resultsSnap.empty) {
+          for (const r of initialData.quizResults) {
+            const ref = doc(db, 'quiz_results', r.id);
+            batch.set(ref, cleanDataForFirestore(r), { merge: true });
             writesCount++;
           }
         }

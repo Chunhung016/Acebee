@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { QuestionBankItem, QuizQuestion, Subject } from '../../types';
 import { MathText } from '../common/MathRenderer';
+import { removeDollarDelimiters } from '../../utils/mathParser';
 import {
   Search,
   Filter,
@@ -120,17 +121,22 @@ export const QuestionBankPickerModal: React.FC<QuestionBankPickerModalProps> = (
     const quizQuestions: QuizQuestion[] = selectedBankItems.map((item, idx) => ({
       id: `q-${Date.now().toString(36)}-${idx}-${Math.random().toString(36).slice(2, 5)}`,
       type: item.type,
-      question: item.question,
+      difficulty: item.difficulty || 'medium',
+      topic: item.topic || 'General',
+      question: removeDollarDelimiters(item.question),
       points: item.points || 1,
-      options: item.options || [],
+      imageUrl: item.imageUrl,
+      options: item.options ? item.options.map(removeDollarDelimiters) : [],
       correctAnswerIndex: item.correctAnswerIndex ?? 0,
-      modelAnswer: item.modelAnswer,
-      guidelines: item.guidelines,
+      modelAnswer: item.modelAnswer ? removeDollarDelimiters(item.modelAnswer) : undefined,
+      guidelines: item.guidelines ? removeDollarDelimiters(item.guidelines) : undefined,
       wordLimit: item.wordLimit,
-      acceptableAnswers: item.acceptableAnswers,
+      acceptableAnswers: item.acceptableAnswers ? item.acceptableAnswers.map(removeDollarDelimiters) : undefined,
       caseSensitive: item.caseSensitive,
-      matchingPairs: item.matchingPairs,
-      explanation: item.explanation,
+      matchingPairs: item.matchingPairs
+        ? item.matchingPairs.map((p) => ({ id: p.id, left: removeDollarDelimiters(p.left), right: removeDollarDelimiters(p.right) }))
+        : undefined,
+      explanation: item.explanation ? removeDollarDelimiters(item.explanation) : undefined,
     }));
 
     onSelectQuestions(quizQuestions);
@@ -339,7 +345,7 @@ export const QuestionBankPickerModal: React.FC<QuestionBankPickerModalProps> = (
                             </div>
 
                             <div className="text-xs font-semibold text-slate-900 leading-snug">
-                              <MathText text={item.question} />
+                              <MathText text={removeDollarDelimiters(item.question)} />
                             </div>
 
                             {item.imageUrl && (
@@ -359,19 +365,19 @@ export const QuestionBankPickerModal: React.FC<QuestionBankPickerModalProps> = (
                                 {item.options.map((opt, oIdx) => (
                                   <span key={oIdx} className="inline-flex items-center">
                                     {oIdx > 0 && <span className="mx-1 text-slate-300">|</span>}
-                                    <MathText text={opt} />
+                                    <MathText text={removeDollarDelimiters(opt)} />
                                   </span>
                                 ))}
                               </div>
                             )}
                             {item.type === 'structure' && item.modelAnswer && (
                               <div className="text-[11px] text-purple-700 line-clamp-1 italic">
-                                Model: {item.modelAnswer}
+                                Model: {removeDollarDelimiters(item.modelAnswer)}
                               </div>
                             )}
                             {item.type === 'fill_in_blank' && item.acceptableAnswers && (
                               <div className="text-[11px] text-emerald-700 line-clamp-1">
-                                Answers: {item.acceptableAnswers.join(', ')}
+                                Answers: {item.acceptableAnswers.map(removeDollarDelimiters).join(', ')}
                               </div>
                             )}
                             {item.type === 'matching' && item.matchingPairs && (

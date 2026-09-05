@@ -4,6 +4,7 @@ import {
   SchoolClass,
   StudentDetail,
   Quiz,
+  QuizQuestion,
   QuizResult,
   TeacherComment,
   Announcement,
@@ -32,6 +33,43 @@ import { generateUsername, generatePassword } from '../utils/credentialGenerator
 import { testConnection } from '../lib/firebase';
 import { firestoreService, FirestoreDataSnapshot } from '../services/firestoreService';
 import { buildParentAlertMessage } from '../utils/alertUtils';
+import { removeDollarDelimiters } from '../utils/mathParser';
+
+function sanitizeQuizQuestion(q: QuizQuestion): QuizQuestion {
+  return {
+    ...q,
+    question: removeDollarDelimiters(q.question),
+    options: q.options?.map(removeDollarDelimiters),
+    explanation: q.explanation ? removeDollarDelimiters(q.explanation) : undefined,
+    modelAnswer: q.modelAnswer ? removeDollarDelimiters(q.modelAnswer) : undefined,
+    guidelines: q.guidelines ? removeDollarDelimiters(q.guidelines) : undefined,
+    acceptableAnswers: q.acceptableAnswers?.map(removeDollarDelimiters),
+    matchingPairs: q.matchingPairs?.map((p) => ({
+      ...p,
+      left: removeDollarDelimiters(p.left),
+      right: removeDollarDelimiters(p.right),
+    })),
+  };
+}
+
+function sanitizeQuestionBankItem<
+  T extends Omit<QuestionBankItem, 'id' | 'createdAt' | 'createdBy' | 'createdByName'> & { id?: string }
+>(item: T): T {
+  return {
+    ...item,
+    question: removeDollarDelimiters(item.question),
+    options: item.options?.map(removeDollarDelimiters),
+    explanation: item.explanation ? removeDollarDelimiters(item.explanation) : undefined,
+    modelAnswer: item.modelAnswer ? removeDollarDelimiters(item.modelAnswer) : undefined,
+    guidelines: item.guidelines ? removeDollarDelimiters(item.guidelines) : undefined,
+    acceptableAnswers: item.acceptableAnswers?.map(removeDollarDelimiters),
+    matchingPairs: item.matchingPairs?.map((p) => ({
+      ...p,
+      left: removeDollarDelimiters(p.left),
+      right: removeDollarDelimiters(p.right),
+    })),
+  };
+}
 
 export interface SupabaseSyncInfo {
   isConnected: boolean;
@@ -216,6 +254,23 @@ const cleanUserRecord = (u: any): User => {
   };
 };
 
+// Helper to broadcast changes across open tabs in same browser for instant sync
+const broadcastChange = (type: string, data?: any) => {
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const ch = new BroadcastChannel('acebee_realtime_sync');
+      ch.postMessage({ type, data, timestamp: Date.now() });
+      ch.close();
+    }
+    // Also dispatch local window event for instant zero-latency same-window reactivity
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('acebee_state_sync', { detail: { type, data } }));
+    }
+  } catch (e) {
+    // Ignore unsupported
+  }
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load state from localStorage or fallback to initial data
   const [schoolInfo, setSchoolInfo] = useState<SchoolInfo>(() => {
@@ -261,7 +316,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [quizzes, setQuizzes] = useState<Quiz[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.QUIZZES);
-    return saved ? JSON.parse(saved) : INITIAL_QUIZZES;
+    const raw = saved ? JSON.parse(saved) : INITIAL_QUIZZES;
+    return (raw as Quiz[]).map((qz) => ({
+      ...qz,
+      questions: qz.questions?.map(sanitizeQuizQuestion) || [],
+    }));
   });
 
   const [quizResults, setQuizResults] = useState<QuizResult[]>(() => {
@@ -276,7 +335,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [questionBank, setQuestionBank] = useState<QuestionBankItem[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.QUESTION_BANK);
-    return saved ? JSON.parse(saved) : INITIAL_QUESTION_BANK;
+    const raw = saved ? JSON.parse(saved) : INITIAL_QUESTION_BANK;
+    return (raw as QuestionBankItem[]).map((q) => sanitizeQuestionBankItem(q));
   });
 
   const [parentAlerts, setParentAlerts] = useState<ParentAlert[]>(() => {
@@ -315,12 +375,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.users && data.users.length > 0) setUsers(data.users.map(cleanUserRecord));
       if (data.classes && data.classes.length > 0) setClasses(data.classes);
       if (data.studentDetails) setStudentDetails(data.studentDetails);
-      if (data.quizzes) setQuizzes(data.quizzes);
+      if (data.quizzes) {
+        setQuizzes(
+          data.quizzes.map((qz) => ({
+            ...qz,
+            questions: qz.questions?.map(sanitizeQuizQuestion) || [],
+          }))
+        );
+      }
       if (data.quizResults) setQuizResults(data.quizResults);
       if (data.teacherComments) setTeacherComments(data.teacherComments);
       if (data.announcements) setAnnouncements(data.announcements);
       if (data.schoolInfo) setSchoolInfo(data.schoolInfo);
-      if (data.questionBank && data.questionBank.length > 0) setQuestionBank(data.questionBank);
+      if (data.questionBank && data.questionBank.length > 0) {
+        setQuestionBank(data.questionBank.map(sanitizeQuestionBankItem));
+      }
       setLastSyncedAt(new Date().toLocaleTimeString());
     } catch (err: any) {
       console.error('Firestore sync error:', err);
@@ -365,35 +434,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    const unsubscribe = firestoreService.subscribeAll((data: FirestoreDataSnapshot) => {
-      if (data.users && data.users.length > 0) {
-        setUsers(data.users.map(cleanUserRecord));
+    const unsubscribe = firestoreService.subscribeAll((data: FirestoreDataSnapshot, collectionName?: string) => {
+      if (!collectionName || collectionName === 'users') {
+        if (data.users && data.users.length > 0) {
+          setUsers(data.users.map(cleanUserRecord));
+        }
       }
-      if (data.classes && data.classes.length > 0) {
-        setClasses(data.classes);
+      if (!collectionName || collectionName === 'classes') {
+        if (data.classes && data.classes.length > 0) {
+          setClasses(data.classes);
+        }
       }
-      if (data.studentDetails) {
-        setStudentDetails(data.studentDetails);
+      if (!collectionName || collectionName === 'student_details') {
+        if (data.studentDetails) {
+          setStudentDetails(data.studentDetails);
+        }
       }
-      if (data.quizzes) {
-        setQuizzes(data.quizzes);
+      if (!collectionName || collectionName === 'quizzes') {
+        if (data.quizzes && data.quizzes.length > 0) {
+          setQuizzes((prev) => {
+            const firestoreIds = new Set(data.quizzes.map((q) => q.id));
+            const localOnly = prev.filter((q) => !firestoreIds.has(q.id));
+            return [
+              ...data.quizzes.map((qz) => ({
+                ...qz,
+                questions: qz.questions?.map(sanitizeQuizQuestion) || [],
+              })),
+              ...localOnly,
+            ];
+          });
+        }
       }
-      if (data.quizResults) {
-        setQuizResults(data.quizResults);
+      if (!collectionName || collectionName === 'quiz_results') {
+        if (data.quizResults && data.quizResults.length > 0) {
+          setQuizResults(data.quizResults);
+        }
       }
-      if (data.teacherComments) {
-        setTeacherComments(data.teacherComments);
+      if (!collectionName || collectionName === 'teacher_comments') {
+        if (data.teacherComments) {
+          setTeacherComments(data.teacherComments);
+        }
       }
-      if (data.announcements) {
-        const deletedIds = getDeletedAnnouncementIds();
-        const validAnnouncements = data.announcements.filter((a) => !deletedIds.has(a.id));
-        setAnnouncements(validAnnouncements);
+      if (!collectionName || collectionName === 'announcements') {
+        if (data.announcements) {
+          const deletedIds = getDeletedAnnouncementIds();
+          const validAnnouncements = data.announcements.filter((a) => !deletedIds.has(a.id));
+          setAnnouncements(validAnnouncements);
+        }
       }
-      if (data.schoolInfo) {
-        setSchoolInfo(data.schoolInfo);
+      if (!collectionName || collectionName === 'school_info') {
+        if (data.schoolInfo) {
+          setSchoolInfo(data.schoolInfo);
+        }
       }
-      if (data.questionBank) {
-        setQuestionBank(data.questionBank);
+      if (!collectionName || collectionName === 'question_bank') {
+        if (data.questionBank) {
+          setQuestionBank(data.questionBank.map(sanitizeQuestionBankItem));
+        }
       }
 
       setLastSyncedAt(new Date().toLocaleTimeString());
@@ -419,8 +516,118 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
+    // Cross-tab real-time sync channel for instant local reactivity
+    let channel: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        channel = new BroadcastChannel('acebee_realtime_sync');
+        channel.onmessage = (event) => {
+          const { type, data } = event.data || {};
+          if (type === 'QUIZZES_CHANGED') {
+            if (Array.isArray(data)) {
+              setQuizzes(data);
+            } else {
+              firestoreService.fetchAll().then((fresh) => {
+                if (fresh.quizzes) setQuizzes(fresh.quizzes);
+                setLastSyncedAt(new Date().toLocaleTimeString());
+              }).catch(() => {});
+            }
+          } else if (type === 'RESULTS_CHANGED') {
+            if (Array.isArray(data)) {
+              setQuizResults(data);
+            } else {
+              firestoreService.fetchAll().then((fresh) => {
+                if (fresh.quizResults) setQuizResults(fresh.quizResults);
+                setLastSyncedAt(new Date().toLocaleTimeString());
+              }).catch(() => {});
+            }
+          } else if (type === 'DATA_CHANGED') {
+            syncWithSupabase().catch(() => {});
+          }
+        };
+      }
+    } catch (e) {
+      console.warn('BroadcastChannel initialization note:', e);
+    }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEYS.QUIZZES && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) setQuizzes(parsed);
+        } catch {}
+      }
+      if (e.key === STORAGE_KEYS.QUIZ_RESULTS && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) setQuizResults(parsed);
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // Intra-window event listener for immediate state sync across components
+    const handleStateSync = (e: Event) => {
+      const customEvt = e as CustomEvent<{ type: string; data?: any }>;
+      const { type, data } = customEvt.detail || {};
+      if (type === 'QUIZZES_CHANGED' && Array.isArray(data)) {
+        setQuizzes(data);
+      } else if (type === 'RESULTS_CHANGED' && Array.isArray(data)) {
+        setQuizResults(data);
+      } else {
+        syncWithSupabase().catch(() => {});
+      }
+    };
+    window.addEventListener('acebee_state_sync', handleStateSync);
+
+    // Fast visibility and focus triggers: whenever user clicks into the window/tab, immediately pull latest data
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncWithSupabase().catch(() => {});
+      }
+    };
+    const handleFocus = () => {
+      syncWithSupabase().catch(() => {});
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    // Background live polling interval (every 8s) to automatically catch any updates from another tab/device without requiring user to refresh
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        firestoreService.fetchAll().then((fresh) => {
+          if (fresh.quizzes && fresh.quizzes.length > 0) {
+            setQuizzes((prev) => {
+              const freshIds = new Set(fresh.quizzes.map((q) => q.id));
+              const localOnly = prev.filter((q) => !freshIds.has(q.id));
+              return [
+                ...fresh.quizzes.map((qz) => ({
+                  ...qz,
+                  questions: qz.questions?.map(sanitizeQuizQuestion) || [],
+                })),
+                ...localOnly,
+              ];
+            });
+          }
+          if (fresh.quizResults && fresh.quizResults.length > 0) {
+            setQuizResults(fresh.quizResults);
+          }
+          if (fresh.announcements && fresh.announcements.length > 0) {
+            const deletedIds = getDeletedAnnouncementIds();
+            setAnnouncements(fresh.announcements.filter((a) => !deletedIds.has(a.id)));
+          }
+        }).catch(() => {});
+      }
+    }, 8000);
+
     return () => {
       unsubscribe();
+      if (channel) channel.close();
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('acebee_state_sync', handleStateSync);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(pollInterval);
     };
   }, []);
 
@@ -959,21 +1166,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Teacher Functions
   const createQuiz = (data: Omit<Quiz, 'id' | 'createdAt' | 'teacherId'>): Quiz => {
+    const sanitizedQuestions = (data.questions || []).map(sanitizeQuizQuestion);
     const newQuiz: Quiz = {
       ...data,
+      questions: sanitizedQuestions,
       id: `quiz-${Date.now().toString(36)}`,
       teacherId: currentUser?.id || 'user-teacher-1',
       createdAt: new Date().toISOString(),
     };
-    setQuizzes((prev) => [newQuiz, ...prev]);
-    firestoreService.saveQuiz(newQuiz);
+    setQuizzes((prev) => {
+      const next = [newQuiz, ...prev];
+      broadcastChange('QUIZZES_CHANGED', next);
+      return next;
+    });
+    firestoreService.saveQuiz(newQuiz).catch((err) => {
+      console.error('Error saving quiz to Firestore:', err);
+    });
     return newQuiz;
   };
 
   const deleteQuiz = (id: string) => {
-    setQuizzes((prev) => prev.filter((q) => q.id !== id));
+    setQuizzes((prev) => {
+      const next = prev.filter((q) => q.id !== id);
+      broadcastChange('QUIZZES_CHANGED', next);
+      return next;
+    });
     setQuizResults((prev) => prev.filter((r) => r.quizId !== id));
-    firestoreService.deleteQuiz(id);
+    firestoreService.deleteQuiz(id).catch((err) => {
+      console.error('Error deleting quiz from Firestore:', err);
+    });
   };
 
   const updateStudentDetail = (studentId: string, data: Partial<StudentDetail>) => {
@@ -1020,9 +1241,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const saveQuestionBankItem = async (
     item: Omit<QuestionBankItem, 'id' | 'createdAt' | 'createdBy' | 'createdByName'> & { id?: string }
   ): Promise<QuestionBankItem> => {
-    const id = item.id || `qb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const cleanItem = sanitizeQuestionBankItem(item);
+    const id = cleanItem.id || `qb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const fullItem: QuestionBankItem = {
-      ...item,
+      ...cleanItem,
       id,
       createdBy: currentUser?.id || 'admin',
       createdByName: currentUser?.fullName || 'Academic Staff',
@@ -1044,7 +1266,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const bulkSaveQuestionBankItems = async (
     items: Array<Omit<QuestionBankItem, 'id' | 'createdAt' | 'createdBy' | 'createdByName'> & { id?: string }>
   ): Promise<number> => {
-    const fullItems: QuestionBankItem[] = items.map((item, idx) => ({
+    const sanitizedItems = items.map(sanitizeQuestionBankItem);
+    const fullItems: QuestionBankItem[] = sanitizedItems.map((item, idx) => ({
       ...item,
       id: item.id || `qb-${Date.now().toString(36)}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
       createdBy: currentUser?.id || 'admin',
@@ -1337,7 +1560,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       completedAt: new Date().toISOString(),
     };
 
-    setQuizResults((prev) => [newResult, ...prev]);
+    setQuizResults((prev) => {
+      const next = [newResult, ...prev];
+      broadcastChange('RESULTS_CHANGED', next);
+      return next;
+    });
     await firestoreService.saveQuizResult(newResult);
     return newResult;
   };

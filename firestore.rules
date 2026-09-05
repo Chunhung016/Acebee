@@ -42,9 +42,13 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Default deny
+    match /parent_alerts/{alertId} {
+      allow read, write: if true;
+    }
+
+    // Default allow for school app collections
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Quiz } from '../../types';
 import { QuizTakerModal } from './QuizTakerModal';
@@ -22,6 +22,10 @@ import {
   Menu,
   X,
   ChevronRight,
+  RefreshCw,
+  Filter,
+  Layers,
+  AlertCircle,
 } from 'lucide-react';
 
 export const StudentDashboard: React.FC = () => {
@@ -32,26 +36,88 @@ export const StudentDashboard: React.FC = () => {
     users,
     quizzes,
     quizResults,
+    supabaseSyncInfo,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'quizzes' | 'diagnostics' | 'leaderboard' | 'grades' | 'teacher'>('quizzes');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [activeQuizForTaking, setActiveQuizForTaking] = useState<Quiz | null>(null);
 
+  // Filter controls for Quizzes view - defaults to 'all' so every published quiz is instantly visible
+  const [scopeFilter, setScopeFilter] = useState<'assigned' | 'all'>('all');
+  const [subjectFilter, setSubjectFilter] = useState<string>('all');
+
+  // Auto-sync with Firestore whenever student enters dashboard to guarantee newest quizzes are loaded
+  useEffect(() => {
+    supabaseSyncInfo.syncWithSupabase().catch(() => {});
+  }, []);
+
   // Find student's detail and assigned class
   const studentDetail = studentDetails.find((d) => d.studentId === currentUser?.id);
-  const studentClass = classes.find((c) => c.id === studentDetail?.classId) || classes[0];
+  const studentClass =
+    classes.find((c) => c.id === studentDetail?.classId) ||
+    classes.find((c) => c.gradeLevel === 'Year 5') ||
+    classes[0];
   const teacherUser = users.find((u) => u.id === studentClass?.teacherId);
 
-  // Quizzes for this student's class
-  const classQuizzes = quizzes.filter((q) => q.classId === studentClass?.id);
+  // Robust Quiz Assignment Matcher
+  // Ensures published quizzes appear whether matched by classId, assignedClassIds, gradeLevel, teacher, or all-school
+  const isDirectlyAssignedQuiz = (q: Quiz): boolean => {
+    // 1. Quizzes explicitly tagged for all cohorts or unassigned
+    if (!q.classId || q.classId === 'all' || q.assignedClassIds?.includes('all')) {
+      return true;
+    }
+    // 2. Direct match with student's assigned class ID
+    if (studentClass && (q.classId === studentClass.id || q.assignedClassIds?.includes(studentClass.id))) {
+      return true;
+    }
+    // 3. Direct match with studentDetail record class ID
+    if (studentDetail?.classId && (q.classId === studentDetail.classId || q.assignedClassIds?.includes(studentDetail.classId))) {
+      return true;
+    }
+    // 4. Grade level match (e.g. Year 5)
+    const quizClass = classes.find((c) => c.id === q.classId);
+    if (
+      quizClass?.gradeLevel &&
+      studentClass?.gradeLevel &&
+      quizClass.gradeLevel.toLowerCase() === studentClass.gradeLevel.toLowerCase()
+    ) {
+      return true;
+    }
+    // 5. Homeroom teacher match
+    if (teacherUser && q.teacherId === teacherUser.id) {
+      return true;
+    }
+    return false;
+  };
+
+  // Quizzes directly matching student's cohort
+  const directAssignedQuizzes = useMemo(() => {
+    return quizzes.filter(isDirectlyAssignedQuiz);
+  }, [quizzes, studentClass, studentDetail, classes, teacherUser]);
+
+  // Quizzes based on active filters, sorted with newest published assessments first
+  const displayedQuizzes = useMemo(() => {
+    let list = quizzes;
+    if (scopeFilter === 'assigned') {
+      list = directAssignedQuizzes.length > 0 ? directAssignedQuizzes : quizzes;
+    }
+    if (subjectFilter !== 'all') {
+      list = list.filter((q) => q.subject === subjectFilter);
+    }
+    return [...list].sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [quizzes, scopeFilter, subjectFilter, directAssignedQuizzes]);
 
   // Student's results
   const myResults = quizResults.filter((r) => r.studentId === currentUser?.id);
   const completedQuizIds = new Set(myResults.map((r) => r.quizId));
 
-  const pendingQuizzes = classQuizzes.filter((q) => !completedQuizIds.has(q.id));
-  const completedQuizzes = classQuizzes.filter((q) => completedQuizIds.has(q.id));
+  const pendingQuizzes = displayedQuizzes.filter((q) => !completedQuizIds.has(q.id));
+  const completedQuizzes = displayedQuizzes.filter((q) => completedQuizIds.has(q.id));
 
   // Compute Class Leaderboard
   const classStudentDetails = studentDetails.filter((d) => d.classId === studentClass?.id);
@@ -245,20 +311,100 @@ export const StudentDashboard: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 bg-blue-950/80 px-4 py-2.5 rounded-lg border border-blue-800/80 relative z-10 shrink-0">
-            <div className="text-right">
-              <span className="text-[10px] text-blue-200 uppercase font-mono tracking-wider font-semibold">Academic Average</span>
-              <div className="text-xl font-bold text-white font-['Plus_Jakarta_Sans',sans-serif]">{overallAverage}%</div>
-            </div>
-            <div className="w-9 h-9 rounded-lg bg-blue-800 text-blue-200 flex items-center justify-center font-bold">
-              <Trophy className="w-5 h-5 text-blue-300" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 relative z-10 shrink-0">
+            {/* Live Sync Trigger */}
+            <button
+              type="button"
+              onClick={() => supabaseSyncInfo.syncWithSupabase()}
+              disabled={supabaseSyncInfo.isSyncing}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-950/90 hover:bg-blue-950 text-blue-100 text-xs font-semibold border border-blue-800/80 transition-all active:scale-95 disabled:opacity-50 shadow-xs"
+              title="Click to fetch newest quizzes from Cloud Firestore"
+              id="student-sync-refresh-btn"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${supabaseSyncInfo.isSyncing ? 'animate-spin text-amber-300' : 'text-emerald-400'}`} />
+              <span>{supabaseSyncInfo.isSyncing ? 'Syncing...' : 'Live Sync'}</span>
+              {supabaseSyncInfo.lastSyncedAt && (
+                <span className="text-[10px] text-blue-300 ml-1 font-mono">({supabaseSyncInfo.lastSyncedAt})</span>
+              )}
+            </button>
+
+            <div className="flex items-center gap-3 bg-blue-950/80 px-4 py-2 rounded-xl border border-blue-800/80">
+              <div className="text-right">
+                <span className="text-[10px] text-blue-200 uppercase font-mono tracking-wider font-semibold">Academic Average</span>
+                <div className="text-xl font-bold text-white font-['Plus_Jakarta_Sans',sans-serif]">{overallAverage}%</div>
+              </div>
+              <div className="w-9 h-9 rounded-lg bg-blue-800 text-blue-200 flex items-center justify-center font-bold">
+                <Trophy className="w-5 h-5 text-blue-300" />
+              </div>
             </div>
           </div>
         </div>
 
       {/* TAB 1: SUBJECT QUIZZES (PENDING & COMPLETED) */}
       {activeTab === 'quizzes' && (
-        <div className="space-y-6">
+        <div className="space-y-5">
+          {/* Cohort & Subject Filter Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-bold text-slate-700 mr-1 flex items-center gap-1">
+                <Layers className="w-3.5 h-3.5 text-blue-600" />
+                Scope:
+              </span>
+              <button
+                type="button"
+                onClick={() => setScopeFilter('assigned')}
+                id="filter-scope-assigned"
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  scopeFilter === 'assigned'
+                    ? 'bg-blue-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                My Cohort ({studentClass?.name || 'Class'}) ({directAssignedQuizzes.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeFilter('all')}
+                id="filter-scope-all"
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  scopeFilter === 'all'
+                    ? 'bg-blue-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                All School Quizzes ({quizzes.length})
+              </button>
+            </div>
+
+            {/* Subject Selector */}
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={subjectFilter}
+                onChange={(e) => setSubjectFilter(e.target.value)}
+                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700"
+                id="student-subject-filter"
+              >
+                <option value="all">All Subjects</option>
+                {fiveSubjects.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Friendly notice if fallback is active */}
+          {scopeFilter === 'assigned' && directAssignedQuizzes.length === 0 && quizzes.length > 0 && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-2.5 text-xs text-blue-800">
+              <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>
+                No assessments are exclusively tagged for <strong>{studentClass?.name || 'your class'}</strong> yet. Showing all {quizzes.length} published school quizzes below for your self-directed learning and practice.
+              </span>
+            </div>
+          )}
+
           {/* Pending Quizzes */}
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -272,48 +418,70 @@ export const StudentDashboard: React.FC = () => {
               <div className="p-6 bg-white rounded-xl border border-slate-200 text-center text-xs text-slate-500">
                 <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
                 <p className="font-bold text-slate-800">You are all caught up!</p>
-                <p className="mt-0.5">No pending quizzes assigned at this time.</p>
+                <p className="mt-0.5">No pending quizzes matching your filter at this time.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {pendingQuizzes.map((quiz) => (
-                  <div
-                    key={quiz.id}
-                    className="bg-white rounded-xl border border-blue-200 hover:border-blue-300 p-5 shadow-xs space-y-3 flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
-                          {quiz.subject}
-                        </span>
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" />
-                          {quiz.timeLimitMinutes} min limit
-                        </span>
+                {pendingQuizzes.map((quiz) => {
+                  const isAssignedToMe = isDirectlyAssignedQuiz(quiz);
+                  const isRecent = quiz.createdAt && Date.now() - new Date(quiz.createdAt).getTime() < 86400000 * 3;
+                  return (
+                    <div
+                      key={quiz.id}
+                      className={`bg-white rounded-xl border p-5 shadow-xs space-y-3 flex flex-col justify-between transition-shadow hover:shadow-sm ${
+                        isAssignedToMe ? 'border-blue-300 ring-1 ring-blue-100' : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                              {quiz.subject}
+                            </span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                              {classes.find((c) => c.id === quiz.classId)?.name || 'All Cohorts'}
+                            </span>
+                            {isAssignedToMe && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
+                                Assigned to Cohort
+                              </span>
+                            )}
+                            {isRecent && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                Fresh
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
+                            <Clock className="w-3.5 h-3.5" />
+                            {quiz.timeLimitMinutes} min
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-slate-900 text-base font-['Plus_Jakarta_Sans',sans-serif]">
+                          {quiz.title}
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                          {quiz.description}
+                        </p>
                       </div>
-                      <h4 className="font-bold text-slate-900 text-base font-['Plus_Jakarta_Sans',sans-serif]">
-                        {quiz.title}
-                      </h4>
-                      <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                        {quiz.description}
-                      </p>
-                    </div>
 
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-[11px] text-slate-400">
-                        {quiz.questions.length} Questions
-                      </span>
-                      <button
-                        onClick={() => setActiveQuizForTaking(quiz)}
-                        className="px-4 py-2 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs active:scale-98 transition-colors"
-                        id={`start-quiz-btn-${quiz.id}`}
-                      >
-                        <Play className="w-3.5 h-3.5 fill-white text-white" />
-                        <span>Start Assessment</span>
-                      </button>
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-400">
+                          {quiz.questions.length} Questions • {quiz.totalPoints || quiz.questions.reduce((s, q) => s + (q.points || 1), 0)} Pts
+                        </span>
+                        <button
+                          onClick={() => setActiveQuizForTaking(quiz)}
+                          className="px-4 py-2 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs active:scale-98 transition-colors"
+                          id={`start-quiz-btn-${quiz.id}`}
+                        >
+                          <Play className="w-3.5 h-3.5 fill-white text-white" />
+                          <span>Start Assessment</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -451,7 +619,7 @@ export const StudentDashboard: React.FC = () => {
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {fiveSubjects.map((subj) => {
-              const subjQuizzes = classQuizzes.filter((q) => q.subject === subj);
+              const subjQuizzes = displayedQuizzes.filter((q) => q.subject === subj);
               const subjResults = myResults.filter((r) =>
                 subjQuizzes.some((q) => q.id === r.quizId)
               );

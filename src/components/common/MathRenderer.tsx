@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { renderMathToHtml, hasMathNotation } from '../../utils/mathParser';
+import { renderMathToHtml, hasMathNotation, removeDollarDelimiters } from '../../utils/mathParser';
 
 interface MathTextProps {
   text?: string | null;
@@ -19,7 +19,7 @@ export const MathText: React.FC<MathTextProps> = ({
   if (!text) return null;
 
   const html = useMemo(() => {
-    return renderMathToHtml(text);
+    return renderMathToHtml(removeDollarDelimiters(text));
   }, [text]);
 
   const Tag = inline ? 'span' : 'div';

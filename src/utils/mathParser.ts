@@ -26,6 +26,23 @@ const SUBSCRIPT_MAP: Record<string, string> = {
 };
 
 /**
+ * Strips unwanted LaTeX dollar delimiters ($ or $$) from question prompts,
+ * options, explanations, and model answers so that teachers and students
+ * never see raw $ characters in the user interface.
+ */
+export function removeDollarDelimiters(text: string): string {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    // Replace block math $$...$$ with clean inner content
+    .replace(/\$\$\s*([\s\S]+?)\s*\$\$/g, '$1')
+    // Replace inline math $...$ with clean inner content
+    .replace(/\$\s*([^\$\n]+?)\s*\$/g, '$1')
+    // Strip any remaining stray dollar signs
+    .replace(/\$+/g, '')
+    .trim();
+}
+
+/**
  * Check whether a string contains any mathematical notation
  */
 export function hasMathNotation(text: string): boolean {
@@ -178,7 +195,7 @@ export function convertNaturalMathToLatex(text: string): string {
  */
 export function renderLatex(math: string, displayMode: boolean = false): string {
   try {
-    let cleanMath = math.trim();
+    let cleanMath = math.replace(/\$+/g, '').trim();
     // For fractions, upgrade \frac to \dfrac for crisp, clearly legible display sizing
     if (cleanMath.includes('\\frac{') && !cleanMath.includes('\\dfrac{')) {
       cleanMath = cleanMath.replace(/\\frac\{/g, '\\dfrac{');
@@ -191,7 +208,7 @@ export function renderLatex(math: string, displayMode: boolean = false): string 
     });
   } catch (err) {
     console.warn('KaTeX render warning:', err);
-    return `<span class="font-mono text-slate-800">${escapeHtml(math)}</span>`;
+    return `<span class="font-mono text-slate-800">${escapeHtml(math.replace(/\$+/g, ''))}</span>`;
   }
 }
 
@@ -252,8 +269,8 @@ function renderInlineMath(text: string): string {
 
   const chunks = preprocessed.split(inlineRegex);
   if (chunks.length === 1) {
-    // If no split occurred, clean any orphan single dollar sign and return escaped text
-    const cleanText = text === '$' ? '' : text;
+    // If no split occurred, clean any stray dollar signs and return escaped text
+    const cleanText = text.replace(/\$+/g, '');
     return escapeHtml(cleanText).replace(/\n/g, '<br/>');
   }
 
@@ -272,12 +289,13 @@ function renderInlineMath(text: string): string {
         return renderLatex(math, false);
       }
 
-      // If chunk is just an isolated orphan '$' created by splitting, discard it
-      if (chunk.trim() === '$') {
+      // If chunk is just an isolated orphan '$' or has stray '$', strip them
+      const cleanChunk = chunk.replace(/\$+/g, '');
+      if (!cleanChunk) {
         return '';
       }
 
-      return escapeHtml(chunk).replace(/\n/g, '<br/>');
+      return escapeHtml(cleanChunk).replace(/\n/g, '<br/>');
     })
     .join('');
 }
