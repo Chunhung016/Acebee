@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { QuestionBankItem, QuestionType, Subject, MatchingPair } from '../../types';
+import { QuestionBankItem, QuestionType, Subject, MatchingPair, QuestionDifficulty } from '../../types';
 import {
   X,
   Plus,
@@ -44,6 +44,7 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
   const [type, setType] = useState<QuestionType>('mcq');
   const [subject, setSubject] = useState<Subject>(defaultSubject);
   const [gradeLevel, setGradeLevel] = useState<string>(defaultGrade);
+  const [difficulty, setDifficulty] = useState<QuestionDifficulty>('medium');
   const [topic, setTopic] = useState<string>('');
   const [tags, setTags] = useState<string>('');
   const [question, setQuestion] = useState<string>('');
@@ -74,6 +75,7 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
       setType(editingItem.type);
       setSubject(editingItem.subject);
       setGradeLevel(editingItem.gradeLevel);
+      setDifficulty(editingItem.difficulty || 'medium');
       setTopic(editingItem.topic || '');
       setTags(editingItem.tags ? editingItem.tags.join(', ') : '');
       setQuestion(editingItem.question);
@@ -165,6 +167,7 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
       type,
       subject,
       gradeLevel,
+      difficulty,
       topic: topic.trim() || 'General',
       tags: parsedTags,
       question: question.trim(),
@@ -246,8 +249,8 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
             </div>
           </div>
 
-          {/* Subject, Grade, Topic, Points Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Subject, Grade, Topic, Difficulty, Points Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Subject</label>
               <select
@@ -275,6 +278,19 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
                     {g}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Difficulty</label>
+              <select
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value as QuestionDifficulty)}
+                className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-700"
+              >
+                <option value="easy">🟢 Easy</option>
+                <option value="medium">🟡 Medium</option>
+                <option value="hard">🔴 Hard</option>
               </select>
             </div>
 

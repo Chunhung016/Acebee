@@ -13,11 +13,13 @@ import { QuestionBankView } from '../questions/QuestionBankView';
 import { QuestionBankPickerModal } from '../questions/QuestionBankPickerModal';
 import { MarkdownBulkImportModal } from '../questions/MarkdownBulkImportModal';
 import { TeacherGradingView } from './TeacherGradingView';
+import { ParentAlertsView } from '../alerts/ParentAlertsView';
 import {
   BookOpen,
   Users,
   Award,
   MessageSquare,
+  MessageCircle,
   PlusCircle,
   Edit,
   Trash2,
@@ -51,6 +53,7 @@ export const TeacherDashboard: React.FC = () => {
     quizResults,
     teacherComments,
     questionBank,
+    parentAlerts,
     createQuiz,
     deleteQuiz,
     updateStudentDetail,
@@ -59,7 +62,7 @@ export const TeacherDashboard: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook'
+    'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts'
   >('roster');
 
   // Find all classes assigned to this teacher
@@ -94,6 +97,8 @@ export const TeacherDashboard: React.FC = () => {
   const [quizMaxAttempts, setQuizMaxAttempts] = useState(1);
   const [quizMarkingMode, setQuizMarkingMode] = useState<'auto' | 'manual'>('auto');
   const [quizDueDate, setQuizDueDate] = useState('2026-03-30');
+  const [quizShuffleQuestions, setQuizShuffleQuestions] = useState(false);
+  const [quizShuffleOptions, setQuizShuffleOptions] = useState(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([
     {
       id: 'q-new-1',
@@ -308,12 +313,16 @@ export const TeacherDashboard: React.FC = () => {
       markingMode: quizMarkingMode,
       totalPoints: calculatedTotalPoints,
       dueDate: new Date(quizDueDate).toISOString(),
+      shuffleQuestions: quizShuffleQuestions,
+      shuffleOptions: quizShuffleOptions,
       questions: validQuestions,
     });
 
     setQuizSuccessMsg(`Quiz "${quizTitle}" published and assigned to ${assignedIds.length} class(es)!`);
     setQuizTitle('');
     setQuizDescription('');
+    setQuizShuffleQuestions(false);
+    setQuizShuffleOptions(false);
     setQuestions([
       {
         id: `q-new-${Date.now()}`,
@@ -562,6 +571,19 @@ export const TeacherDashboard: React.FC = () => {
         >
           <Award className="w-4 h-4" />
           Class Submissions & Gradebook ({currentClass?.name || 'Class'})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('alerts')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            activeTab === 'alerts'
+              ? 'bg-blue-900 text-white shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+          id="teacher-tab-alerts"
+        >
+          <MessageCircle className="w-4 h-4 text-emerald-500" />
+          <span>Parent Alerts ({parentAlerts.length})</span>
         </button>
       </div>
 
@@ -966,6 +988,41 @@ export const TeacherDashboard: React.FC = () => {
                   <p className="text-[10px] text-slate-500 mt-1">
                     Closes submission window after target date.
                   </p>
+                </div>
+              </div>
+
+              {/* Anti-Cheating & Randomization Engine */}
+              <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200/80 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-950">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Anti-Cheating & Question Randomization:</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <label className="flex items-start gap-2.5 p-2.5 bg-white rounded-lg border border-blue-100 cursor-pointer hover:border-blue-300 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={quizShuffleQuestions}
+                      onChange={(e) => setQuizShuffleQuestions(e.target.checked)}
+                      className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mt-0.5"
+                    />
+                    <div>
+                      <span className="font-semibold text-slate-800 block">Shuffle Question Sequence</span>
+                      <span className="text-[10px] text-slate-500 block">Randomizes question delivery order per student</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-2.5 p-2.5 bg-white rounded-lg border border-blue-100 cursor-pointer hover:border-blue-300 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={quizShuffleOptions}
+                      onChange={(e) => setQuizShuffleOptions(e.target.checked)}
+                      className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mt-0.5"
+                    />
+                    <div>
+                      <span className="font-semibold text-slate-800 block">Shuffle MCQ Options (A / B / C / D)</span>
+                      <span className="text-[10px] text-slate-500 block">Randomizes choice positions per student</span>
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -1738,6 +1795,9 @@ export const TeacherDashboard: React.FC = () => {
 
       {/* TAB 6: MANUAL GRADING & REVIEWS */}
       {activeTab === 'grading' && <TeacherGradingView currentClass={currentClass} />}
+
+      {/* TAB 7: PARENT ALERTS & DISPATCHES */}
+      {activeTab === 'alerts' && <ParentAlertsView teacherClassId={currentClass?.id} />}
 
       {/* MODAL: Pick from Question Bank */}
       <QuestionBankPickerModal

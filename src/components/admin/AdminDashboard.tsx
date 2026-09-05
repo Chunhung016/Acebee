@@ -8,11 +8,13 @@ import { ImageLightboxModal } from '../ImageLightboxModal';
 import { normalizeImageUrl, compressImageFile } from '../../utils/imageUtils';
 import { QuestionBankView } from '../questions/QuestionBankView';
 import { AdminClassMarksView } from './AdminClassMarksView';
+import { ParentAlertsView } from '../alerts/ParentAlertsView';
 import {
   Users,
   UserPlus,
   Link2,
   Megaphone,
+  MessageCircle,
   Shield,
   Layers,
   Sparkles,
@@ -67,12 +69,13 @@ export const AdminDashboard: React.FC = () => {
     createAnnouncement,
     deleteAnnouncement,
     togglePinAnnouncement,
+    parentAlerts,
     setCurrentView,
     supabaseSyncInfo,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'school-info' | 'accounts' | 'binding' | 'announcements' | 'question-bank' | 'all-marks'
+    'overview' | 'school-info' | 'accounts' | 'binding' | 'announcements' | 'question-bank' | 'all-marks' | 'alerts'
   >('overview');
 
   // School Info State
@@ -473,6 +476,19 @@ export const AdminDashboard: React.FC = () => {
         >
           <Award className="w-4 h-4" />
           All Class Marks & Feedback
+        </button>
+
+        <button
+          onClick={() => setActiveTab('alerts')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            activeTab === 'alerts'
+              ? 'bg-blue-900 text-white shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+          id="admin-tab-alerts"
+        >
+          <MessageCircle className="w-4 h-4 text-emerald-500" />
+          Parent Alerts ({parentAlerts.length})
         </button>
       </div>
 
@@ -1724,6 +1740,11 @@ export const AdminDashboard: React.FC = () => {
       {/* TAB 7: ALL CLASS MARKS & APPOINTED QUIZ FEEDBACK */}
       {activeTab === 'all-marks' && (
         <AdminClassMarksView />
+      )}
+
+      {/* TAB 8: PARENT ALERTS & DISPATCHES */}
+      {activeTab === 'alerts' && (
+        <ParentAlertsView />
       )}
 
       {/* EDIT CLASS MODAL */}

@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Quiz } from '../../types';
 import { QuizTakerModal } from './QuizTakerModal';
 import { UserAvatar } from '../common/UserAvatar';
+import { StudentWeakAreaDiagnostics } from './StudentWeakAreaDiagnostics';
 import {
   Award,
   BookOpen,
@@ -17,6 +18,7 @@ import {
   Mail,
   Medal,
   Calendar,
+  Brain,
 } from 'lucide-react';
 
 export const StudentDashboard: React.FC = () => {
@@ -29,7 +31,7 @@ export const StudentDashboard: React.FC = () => {
     quizResults,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'quizzes' | 'leaderboard' | 'grades' | 'teacher'>('quizzes');
+  const [activeTab, setActiveTab] = useState<'quizzes' | 'diagnostics' | 'leaderboard' | 'grades' | 'teacher'>('quizzes');
   const [activeQuizForTaking, setActiveQuizForTaking] = useState<Quiz | null>(null);
 
   // Find student's detail and assigned class
@@ -129,6 +131,19 @@ export const StudentDashboard: React.FC = () => {
         >
           <BookOpen className="w-4 h-4" />
           Subject Quizzes ({pendingQuizzes.length} Pending)
+        </button>
+
+        <button
+          onClick={() => setActiveTab('diagnostics')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            activeTab === 'diagnostics'
+              ? 'bg-blue-900 text-white shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+          id="student-tab-diagnostics"
+        >
+          <Brain className="w-4 h-4 text-purple-400" />
+          Weak Area Diagnostics
         </button>
 
         <button
@@ -271,6 +286,9 @@ export const StudentDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TAB: WEAK AREA DIAGNOSTICS */}
+      {activeTab === 'diagnostics' && <StudentWeakAreaDiagnostics />}
 
       {/* TAB 2: CLASS LEADERBOARD */}
       {activeTab === 'leaderboard' && (

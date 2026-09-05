@@ -59,6 +59,39 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [justSubmittedResult, setJustSubmittedResult] = useState<QuizResult | null>(null);
 
+  // Active Questions with Option & Question Randomization Support
+  const activeQuestions = useMemo(() => {
+    let list = [...quiz.questions];
+    if (quiz.shuffleQuestions && !isReviewOnly && !hasExceededAttempts) {
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+    }
+
+    return list.map((q) => {
+      if ((!q.type || q.type === 'mcq') && q.options && quiz.shuffleOptions && !isReviewOnly && !hasExceededAttempts) {
+        const correctText = q.options[q.correctAnswerIndex ?? 0];
+        const shuffled = [...q.options];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        const newCorrectIdx = shuffled.indexOf(correctText);
+        return {
+          ...q,
+          displayOptions: shuffled,
+          displayCorrectAnswerIndex: newCorrectIdx >= 0 ? newCorrectIdx : (q.correctAnswerIndex ?? 0),
+        };
+      }
+      return {
+        ...q,
+        displayOptions: q.options,
+        displayCorrectAnswerIndex: q.correctAnswerIndex,
+      };
+    });
+  }, [quiz.id, quiz.questions, quiz.shuffleQuestions, quiz.shuffleOptions, isReviewOnly, hasExceededAttempts]);
+
   // Timer countdown
   useEffect(() => {
     if (isSubmitted || isReviewOnly || hasExceededAttempts) return;
@@ -78,7 +111,7 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
     return () => clearInterval(timer);
   }, [isSubmitted, isReviewOnly, hasExceededAttempts]);
 
-  const currentQ = quiz.questions[currentQuestionIndex];
+  const currentQ = activeQuestions[currentQuestionIndex];
 
   // Helper for counting words in essay
   const countWords = (str: string) => {
@@ -96,13 +129,14 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
     let calculatedScore = 0;
     let totalPoints = 0;
 
-    const answerRecords: StudentAnswerRecord[] = quiz.questions.map((q) => {
+    const answerRecords: StudentAnswerRecord[] = activeQuestions.map((q) => {
       const qPoints = q.points || 1;
       totalPoints += qPoints;
 
       if (!q.type || q.type === 'mcq') {
         const selected = mcqAnswers[q.id] ?? -1;
-        const isCorrect = selected === q.correctAnswerIndex;
+        const targetCorrect = q.displayCorrectAnswerIndex ?? q.correctAnswerIndex ?? 0;
+        const isCorrect = selected === targetCorrect;
         if (isCorrect) calculatedScore += qPoints;
         return {
           questionId: q.id,
@@ -237,6 +271,11 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
               <span className="text-xs text-blue-200">
                 Mode: <strong className="capitalize">{quiz.markingMode || 'auto'}</strong>
               </span>
+              {(quiz.shuffleQuestions || quiz.shuffleOptions) && (
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 px-2 py-0.5 rounded font-mono">
+                  Randomized
+                </span>
+              )}
             </div>
             <h3 className="text-lg font-bold font-['Plus_Jakarta_Sans',sans-serif] mt-1 tracking-tight">
               {quiz.title}
@@ -378,7 +417,7 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
               {/* 1. MCQ OPTIONS */}
               {(!currentQ.type || currentQ.type === 'mcq') && (
                 <div className="space-y-2.5">
-                  {currentQ.options?.map((option, idx) => {
+                  {(currentQ.displayOptions || currentQ.options)?.map((option, idx) => {
                     const isSelected = mcqAnswers[currentQ.id] === idx;
                     return (
                       <button

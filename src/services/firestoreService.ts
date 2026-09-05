@@ -343,10 +343,11 @@ export const firestoreService = {
         }
       }
 
-      // Check Announcements
+      // Check Announcements - only seed if both announcements and users are completely empty (fresh database)
       if (initialData.announcements && initialData.announcements.length > 0) {
         const annSnap = await getDocs(collection(db, 'announcements'));
-        if (annSnap.empty) {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        if (annSnap.empty && usersSnap.empty) {
           for (const a of initialData.announcements) {
             const ref = doc(db, 'announcements', a.id);
             batch.set(ref, cleanDataForFirestore(a), { merge: true });
@@ -487,12 +488,22 @@ export const firestoreService = {
   },
 
   async saveAnnouncement(announcement: Announcement): Promise<void> {
-    const ref = doc(db, 'announcements', announcement.id);
-    await setDoc(ref, cleanDataForFirestore(announcement), { merge: true });
+    try {
+      const ref = doc(db, 'announcements', announcement.id);
+      await setDoc(ref, cleanDataForFirestore(announcement), { merge: true });
+    } catch (error) {
+      console.error(`Firestore error saving announcement ${announcement.id}:`, error);
+      throw error;
+    }
   },
 
   async deleteAnnouncement(announcementId: string): Promise<void> {
-    await deleteDoc(doc(db, 'announcements', announcementId));
+    try {
+      await deleteDoc(doc(db, 'announcements', announcementId));
+    } catch (error) {
+      console.error(`Firestore error deleting announcement ${announcementId}:`, error);
+      throw error;
+    }
   },
 
   async saveSchoolInfo(info: SchoolInfo): Promise<void> {

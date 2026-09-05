@@ -1,4 +1,4 @@
-import { User, SchoolClass, StudentDetail, Quiz, QuizResult, TeacherComment, Announcement, SchoolInfo, QuestionBankItem } from '../types';
+import { User, SchoolClass, StudentDetail, Quiz, QuizResult, TeacherComment, Announcement, SchoolInfo, QuestionBankItem, ParentAlert } from '../types';
 
 export const INITIAL_SCHOOL_INFO: SchoolInfo = {
   name: 'ACEBEE Academy',
@@ -164,4 +164,28 @@ export const INITIAL_QUESTION_BANK: QuestionBankItem[] = [
     createdAt: now,
   },
 ];
+
+export const INITIAL_PARENT_ALERTS: ParentAlert[] = [
+  {
+    id: 'alert-demo-1',
+    studentId: 'user-student-1',
+    studentName: 'Lucas Vance',
+    parentId: 'user-parent-1',
+    parentName: 'Robert Vance',
+    parentPhone: '+1 (555) 902-5511',
+    parentEmail: 'robert.vance@example.com',
+    quizId: 'quiz-math-fractions',
+    quizTitle: 'Fractions & Ratios Mastery Quiz',
+    subject: 'Mathematics',
+    score: 18,
+    totalPoints: 20,
+    percentage: 90,
+    teacherFeedback: 'Outstanding analytical reasoning and flawless simplification of fractional operations.',
+    channel: 'both',
+    messageText: '📢 ACEBEE Academy: Lucas Vance has scored 18/20 (90%) in Fractions & Ratios Mastery Quiz. Teacher Feedback: "Outstanding analytical reasoning and flawless simplification of fractional operations."',
+    status: 'sent',
+    sentAt: now,
+  },
+];
+
 

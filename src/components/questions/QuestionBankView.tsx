@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { QuestionBankItem, QuestionType, Subject } from '../../types';
+import { QuestionBankItem, QuestionType, Subject, QuestionDifficulty } from '../../types';
 import { MarkdownBulkImportModal } from './MarkdownBulkImportModal';
 import { SingleQuestionModal } from './SingleQuestionModal';
 import { ParsedQuestionDraft } from '../../utils/markdownQuestionParser';
@@ -53,6 +53,7 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({ onCreateQuiz
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<Subject | 'All'>('All');
   const [selectedType, setSelectedType] = useState<QuestionType | 'all'>('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<QuestionDifficulty | 'all'>('all');
   const [selectedGrade, setSelectedGrade] = useState<string>('All');
 
   // Modals state
@@ -83,10 +84,12 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({ onCreateQuiz
       const matchesSubject = selectedSubject === 'All' || item.subject === selectedSubject;
       const matchesType = selectedType === 'all' || item.type === selectedType;
       const matchesGrade = selectedGrade === 'All' || item.gradeLevel === selectedGrade;
+      const matchesDifficulty =
+        selectedDifficulty === 'all' || (item.difficulty || 'medium') === selectedDifficulty;
 
-      return matchesSearch && matchesSubject && matchesType && matchesGrade;
+      return matchesSearch && matchesSubject && matchesType && matchesGrade && matchesDifficulty;
     });
-  }, [questionBank, searchQuery, selectedSubject, selectedType, selectedGrade]);
+  }, [questionBank, searchQuery, selectedSubject, selectedType, selectedGrade, selectedDifficulty]);
 
   const handleBulkImport = async (parsedDrafts: ParsedQuestionDraft[]) => {
     await bulkSaveQuestionBankItems(parsedDrafts);
@@ -242,23 +245,49 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({ onCreateQuiz
           </div>
         </div>
 
-        {/* Question Type Pills */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {QUESTION_TYPES.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setSelectedType(t.id)}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  selectedType === t.id
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+        {/* Question Type & Difficulty Pills */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {QUESTION_TYPES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSelectedType(t.id)}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    selectedType === t.id
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5 pl-3 border-l border-slate-200">
+              <span className="text-[11px] font-medium text-slate-500">Difficulty:</span>
+              {(['all', 'easy', 'medium', 'hard'] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setSelectedDifficulty(d)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold capitalize transition-all ${
+                    selectedDifficulty === d
+                      ? d === 'easy'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : d === 'hard'
+                        ? 'bg-rose-600 text-white shadow-sm'
+                        : d === 'medium'
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'bg-slate-800 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Select all toggle */}
@@ -350,6 +379,17 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({ onCreateQuiz
                         </span>
                         <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md">
                           {q.subject}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                            q.difficulty === 'easy'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : q.difficulty === 'hard'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}
+                        >
+                          {q.difficulty || 'medium'}
                         </span>
                         <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
                           {q.gradeLevel}

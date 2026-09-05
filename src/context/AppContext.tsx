@@ -14,6 +14,7 @@ import {
   QuestionBankItem,
   QuizAnswerRecord,
   QuizResultStatus,
+  ParentAlert,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -25,10 +26,12 @@ import {
   INITIAL_TEACHER_COMMENTS,
   INITIAL_SCHOOL_INFO,
   INITIAL_QUESTION_BANK,
+  INITIAL_PARENT_ALERTS,
 } from '../data/initialData';
 import { generateUsername, generatePassword } from '../utils/credentialGenerator';
 import { testConnection } from '../lib/firebase';
 import { firestoreService, FirestoreDataSnapshot } from '../services/firestoreService';
+import { buildParentAlertMessage } from '../utils/alertUtils';
 
 export interface SupabaseSyncInfo {
   isConnected: boolean;
@@ -49,6 +52,7 @@ interface AppContextType {
   quizResults: QuizResult[];
   teacherComments: TeacherComment[];
   questionBank: QuestionBankItem[];
+  parentAlerts: ParentAlert[];
   currentView: 'public' | 'dashboard';
   isLoginModalOpen: boolean;
   selectedQuizForTaking: Quiz | null;
@@ -107,6 +111,7 @@ interface AppContextType {
   deleteTeacherComment: (id: string) => void;
   updateQuizResult: (resultId: string, updates: Partial<QuizResult>) => Promise<void>;
   releaseQuizMarks: (resultId: string, teacherFeedback?: string, questionScores?: { questionId: string; pointsAwarded: number; teacherComment?: string }[]) => Promise<void>;
+  batchReleaseQuizMarks: (quizId: string, customFeedback?: string) => Promise<{ releasedCount: number; alertsCreated: number }>;
 
   // Student Operations
   submitQuizResult: (
@@ -119,6 +124,14 @@ interface AppContextType {
 
   // Parent Operations
   markCommentAsRead: (commentId: string) => void;
+  dismissParentAlert: (alertId: string) => void;
+  updateParentAlertStatus: (alertId: string, status: 'sent' | 'pending') => void;
+  sendParentBroadcast: (
+    classId: string,
+    title: string,
+    message: string,
+    channel?: 'whatsapp' | 'email' | 'both'
+  ) => number;
 
   // Reset helper
   resetToDemoData: () => void;
@@ -135,8 +148,47 @@ const STORAGE_KEYS = {
   QUIZ_RESULTS: 'acebee_quiz_results_v2',
   TEACHER_COMMENTS: 'acebee_teacher_comments_v2',
   QUESTION_BANK: 'acebee_question_bank_v2',
+  PARENT_ALERTS: 'acebee_parent_alerts_v2',
   CURRENT_USER: 'acebee_current_user_v2',
   SCHOOL_INFO: 'acebee_school_info_v2',
+};
+
+const DELETED_ANNOUNCEMENTS_KEY = 'acebee_deleted_announcements_v2';
+const ANNOUNCEMENTS_INITIALIZED_KEY = 'acebee_announcements_initialized_v2';
+
+const getDeletedAnnouncementIds = (): Set<string> => {
+  try {
+    const stored = localStorage.getItem(DELETED_ANNOUNCEMENTS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) return new Set(parsed);
+    }
+  } catch (e) {
+    console.warn('Failed to parse deleted announcement ids:', e);
+  }
+  return new Set();
+};
+
+const recordDeletedAnnouncementId = (id: string) => {
+  try {
+    const set = getDeletedAnnouncementIds();
+    set.add(id);
+    localStorage.setItem(DELETED_ANNOUNCEMENTS_KEY, JSON.stringify(Array.from(set)));
+  } catch (e) {
+    console.warn('Failed to save deleted announcement id:', e);
+  }
+};
+
+const clearDeletedAnnouncementId = (id: string) => {
+  try {
+    const set = getDeletedAnnouncementIds();
+    if (set.has(id)) {
+      set.delete(id);
+      localStorage.setItem(DELETED_ANNOUNCEMENTS_KEY, JSON.stringify(Array.from(set)));
+    }
+  } catch (e) {
+    console.warn('Failed to clear deleted announcement id:', e);
+  }
 };
 
 const cleanUserRecord = (u: any): User => {
@@ -188,16 +240,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
+    const deletedIds = getDeletedAnnouncementIds();
     const saved = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
-    if (saved) {
+    if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((a) => !deletedIds.has(a.id));
+        }
       } catch (e) {
         console.warn('Failed to parse cached announcements:', e);
       }
     }
-    return INITIAL_ANNOUNCEMENTS;
+    const isInit = localStorage.getItem(ANNOUNCEMENTS_INITIALIZED_KEY);
+    if (isInit) {
+      return [];
+    }
+    return INITIAL_ANNOUNCEMENTS.filter((a) => !deletedIds.has(a.id));
   });
 
   const [quizzes, setQuizzes] = useState<Quiz[]>(() => {
@@ -218,6 +277,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [questionBank, setQuestionBank] = useState<QuestionBankItem[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.QUESTION_BANK);
     return saved ? JSON.parse(saved) : INITIAL_QUESTION_BANK;
+  });
+
+  const [parentAlerts, setParentAlerts] = useState<ParentAlert[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.PARENT_ALERTS);
+    return saved ? JSON.parse(saved) : INITIAL_PARENT_ALERTS;
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -320,8 +384,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.teacherComments) {
         setTeacherComments(data.teacherComments);
       }
-      if (data.announcements && data.announcements.length > 0) {
-        setAnnouncements(data.announcements);
+      if (data.announcements) {
+        const deletedIds = getDeletedAnnouncementIds();
+        const validAnnouncements = data.announcements.filter((a) => !deletedIds.has(a.id));
+        setAnnouncements(validAnnouncements);
       }
       if (data.schoolInfo) {
         setSchoolInfo(data.schoolInfo);
@@ -332,7 +398,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setLastSyncedAt(new Date().toLocaleTimeString());
 
-      // On initial sync, if there are existing accounts or announcements stored locally in the browser
+      // On initial sync, if there are existing accounts stored locally in the browser
       // that are not yet in Firestore, automatically migrate them up to Firestore!
       if (!isInitialSyncDone.current) {
         isInitialSyncDone.current = true;
@@ -346,11 +412,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               console.log(`Syncing ${missingUsers.length} local users up to Cloud Firestore...`);
               firestoreService.bulkSaveUsers(missingUsers);
             }
-          }
-
-          if (data.announcements.length === 0 && INITIAL_ANNOUNCEMENTS.length > 0) {
-            console.log('Seeding initial announcements to Firestore...');
-            INITIAL_ANNOUNCEMENTS.forEach((a) => firestoreService.saveAnnouncement(a));
           }
         } catch (e) {
           console.warn('Local-to-cloud migration check note:', e);
@@ -391,6 +452,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(announcements));
+      localStorage.setItem(ANNOUNCEMENTS_INITIALIZED_KEY, 'true');
     } catch (e) {
       console.warn('localStorage quota warning for announcements', e);
     }
@@ -411,6 +473,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questionBank));
   }, [questionBank]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.PARENT_ALERTS, JSON.stringify(parentAlerts));
+    } catch (e) {
+      console.warn('localStorage quota warning for parentAlerts', e);
+    }
+  }, [parentAlerts]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SCHOOL_INFO, JSON.stringify(schoolInfo));
@@ -858,14 +928,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       authorId: currentUser?.id || 'user-admin-1',
       createdAt: new Date().toISOString(),
     };
+    clearDeletedAnnouncementId(newAnn.id);
     setAnnouncements((prev) => [newAnn, ...prev]);
-    firestoreService.saveAnnouncement(newAnn);
+    firestoreService.saveAnnouncement(newAnn).catch((err) => {
+      console.error(`Failed to save announcement ${newAnn.id} to Firestore:`, err);
+    });
     return newAnn;
   };
 
   const deleteAnnouncement = (id: string) => {
+    recordDeletedAnnouncementId(id);
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-    firestoreService.deleteAnnouncement(id);
+    firestoreService.deleteAnnouncement(id).catch((err) => {
+      console.error(`Failed to delete announcement ${id} from Firestore:`, err);
+    });
   };
 
   const togglePinAnnouncement = (id: string) => {
@@ -1038,6 +1114,192 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((r) => (r.id === resultId ? { ...r, ...updates } : r))
     );
     await firestoreService.updateQuizResult(resultId, updates);
+
+    // Auto-generate Parent Alert for this student
+    const student = users.find((u) => u.id === target.studentId);
+    const detail = studentDetails.find((d) => d.studentId === target.studentId);
+    const targetQuiz = quizzes.find((q) => q.id === target.quizId);
+    const studentName = student?.fullName || 'Student';
+    const parentName = detail?.parentName || 'Parent / Guardian';
+    const parentPhone = detail?.parentPhone || '';
+    const parentEmail = detail?.parentEmail || '';
+    const finalFeedback = teacherFeedback ?? target.teacherFeedback;
+
+    const alertMsg = buildParentAlertMessage({
+      parentName,
+      studentName,
+      quizTitle: targetQuiz?.title || 'Quiz',
+      subject: targetQuiz?.subject || 'Academic',
+      score: newScore,
+      totalPoints: target.totalPoints,
+      percentage: newPercentage,
+      teacherFeedback: finalFeedback,
+      schoolName: schoolInfo.name,
+    });
+
+    const newAlert: ParentAlert = {
+      id: `alert-${Date.now()}-${resultId}`,
+      studentId: target.studentId,
+      studentName,
+      parentId: detail?.parentId,
+      parentName,
+      parentPhone,
+      parentEmail,
+      quizId: target.quizId,
+      quizTitle: targetQuiz?.title || 'Quiz',
+      subject: targetQuiz?.subject || 'Academic',
+      score: newScore,
+      totalPoints: target.totalPoints,
+      percentage: newPercentage,
+      teacherFeedback: finalFeedback,
+      channel: parentPhone && parentEmail ? 'both' : parentPhone ? 'whatsapp' : 'email',
+      messageText: alertMsg,
+      status: 'sent',
+      sentAt: new Date().toISOString(),
+    };
+
+    setParentAlerts((prev) => [newAlert, ...prev]);
+  };
+
+  const batchReleaseQuizMarks = async (
+    quizId: string,
+    customFeedback?: string
+  ): Promise<{ releasedCount: number; alertsCreated: number }> => {
+    const targetQuiz = quizzes.find((q) => q.id === quizId);
+    const nowIso = new Date().toISOString();
+    let releasedCount = 0;
+    const newAlerts: ParentAlert[] = [];
+
+    const updatedResults = quizResults.map((r) => {
+      if (r.quizId === quizId && (r.status === 'pending_review' || !r.releasedToStudent)) {
+        releasedCount++;
+        const feedback = customFeedback || r.teacherFeedback || 'Marked and released by teacher.';
+        const student = users.find((u) => u.id === r.studentId);
+        const detail = studentDetails.find((d) => d.studentId === r.studentId);
+        const studentName = student?.fullName || 'Student';
+        const parentName = detail?.parentName || 'Parent / Guardian';
+        const parentPhone = detail?.parentPhone || '';
+        const parentEmail = detail?.parentEmail || '';
+
+        const msgText = buildParentAlertMessage({
+          parentName,
+          studentName,
+          quizTitle: targetQuiz?.title || 'Quiz',
+          subject: targetQuiz?.subject || 'Academic',
+          score: r.score,
+          totalPoints: r.totalPoints,
+          percentage: r.percentage,
+          teacherFeedback: feedback,
+          schoolName: schoolInfo.name,
+        });
+
+        newAlerts.push({
+          id: `alert-${Date.now()}-${r.id}`,
+          studentId: r.studentId,
+          studentName,
+          parentId: detail?.parentId,
+          parentName,
+          parentPhone,
+          parentEmail,
+          quizId: r.quizId,
+          quizTitle: targetQuiz?.title || 'Quiz',
+          subject: targetQuiz?.subject || 'Academic',
+          score: r.score,
+          totalPoints: r.totalPoints,
+          percentage: r.percentage,
+          teacherFeedback: feedback,
+          channel: parentPhone && parentEmail ? 'both' : parentPhone ? 'whatsapp' : 'email',
+          messageText: msgText,
+          status: 'sent',
+          sentAt: nowIso,
+        });
+
+        return {
+          ...r,
+          status: 'graded' as const,
+          releasedToStudent: true,
+          teacherFeedback: feedback,
+          gradedBy: currentUser?.fullName || 'Teacher',
+          gradedAt: nowIso,
+        };
+      }
+      return r;
+    });
+
+    setQuizResults(updatedResults);
+    if (newAlerts.length > 0) {
+      setParentAlerts((prev) => [...newAlerts, ...prev]);
+    }
+
+    // Persist to firestore asynchronously
+    updatedResults
+      .filter((r) => r.quizId === quizId)
+      .forEach((r) => {
+        firestoreService.updateQuizResult(r.id, {
+          status: 'graded',
+          releasedToStudent: true,
+          teacherFeedback: r.teacherFeedback,
+          gradedBy: r.gradedBy,
+          gradedAt: r.gradedAt,
+        }).catch(console.error);
+      });
+
+    return { releasedCount, alertsCreated: newAlerts.length };
+  };
+
+  const dismissParentAlert = (alertId: string) => {
+    setParentAlerts((prev) => prev.filter((a) => a.id !== alertId));
+  };
+
+  const updateParentAlertStatus = (alertId: string, status: 'sent' | 'pending') => {
+    setParentAlerts((prev) =>
+      prev.map((a) => (a.id === alertId ? { ...a, status, sentAt: new Date().toISOString() } : a))
+    );
+  };
+
+  const sendParentBroadcast = (
+    classId: string,
+    title: string,
+    message: string,
+    channel: 'whatsapp' | 'email' | 'both' = 'both'
+  ): number => {
+    const classStudents = studentDetails.filter((d) => d.classId === classId);
+    const nowIso = new Date().toISOString();
+    const newAlerts: ParentAlert[] = [];
+
+    classStudents.forEach((det) => {
+      const student = users.find((u) => u.id === det.studentId);
+      const studentName = student?.fullName || 'Student';
+      const parentPhone = det.parentPhone || '';
+      const parentEmail = det.parentEmail || '';
+
+      const broadcastMsg = `🏫 *${schoolInfo.name} Announcement*\n\nDear ${det.parentName || 'Parent / Guardian'},\nRegarding student: *${studentName}*\n\n📌 *${title}*\n${message}\n\nWarm regards,\nAcademic Administration\n${schoolInfo.name}`;
+
+      newAlerts.push({
+        id: `alert-broadcast-${Date.now()}-${det.studentId}`,
+        studentId: det.studentId,
+        studentName,
+        parentId: det.parentId,
+        parentName: det.parentName || 'Parent / Guardian',
+        parentPhone,
+        parentEmail,
+        quizId: 'broadcast',
+        quizTitle: title,
+        subject: 'School Notice',
+        score: 0,
+        totalPoints: 0,
+        percentage: 100,
+        channel,
+        messageText: broadcastMsg,
+        status: 'sent',
+        sentAt: nowIso,
+      });
+    });
+
+    if (newAlerts.length > 0) {
+      setParentAlerts((prev) => [...newAlerts, ...prev]);
+    }
+    return newAlerts.length;
   };
 
   // Student Functions
@@ -1140,6 +1402,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       quizResults,
       teacherComments,
       questionBank,
+      parentAlerts,
       currentView,
       isLoginModalOpen,
       selectedQuizForTaking,
@@ -1177,8 +1440,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteTeacherComment,
       updateQuizResult,
       releaseQuizMarks,
+      batchReleaseQuizMarks,
       submitQuizResult,
       markCommentAsRead,
+      dismissParentAlert,
+      updateParentAlertStatus,
+      sendParentBroadcast,
       resetToDemoData,
     }),
     [
@@ -1191,6 +1458,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       quizResults,
       teacherComments,
       questionBank,
+      parentAlerts,
       currentView,
       isLoginModalOpen,
       selectedQuizForTaking,

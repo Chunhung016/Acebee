@@ -1,7 +1,8 @@
-import { QuestionType, Subject, QuestionBankItem, QuizQuestion } from '../types';
+import { QuestionType, Subject, QuestionBankItem, QuizQuestion, QuestionDifficulty } from '../types';
 
 export interface ParsedQuestionDraft {
   type: QuestionType;
+  difficulty?: QuestionDifficulty;
   question: string;
   points: number;
   subject: Subject;
@@ -54,6 +55,7 @@ export function parseMarkdownQuestions(
       let subject: Subject = fallbackSubject;
       let gradeLevel = fallbackGrade;
       let topic = 'General';
+      let difficulty: QuestionDifficulty = 'medium';
       let points = 1;
       let explanation = '';
       let modelAnswer = '';
@@ -91,6 +93,8 @@ export function parseMarkdownQuestions(
               subject = p as Subject;
             } else if (/^(?:Year|Grade|Form|Standard)\s*\d+/i.test(p)) {
               gradeLevel = p;
+            } else if (['easy', 'medium', 'hard'].includes(p.toLowerCase())) {
+              difficulty = p.toLowerCase() as QuestionDifficulty;
             } else if (p.length > 0) {
               topic = p;
             }
@@ -109,6 +113,13 @@ export function parseMarkdownQuestions(
           else if (t.includes('struct')) type = 'structure';
           else if (t.includes('fill') || t.includes('blank')) type = 'fill_in_blank';
           else if (t.includes('match')) type = 'matching';
+          continue;
+        }
+
+        if (/^(?:difficulty|level)\s*:/i.test(line)) {
+          const diffStr = line.replace(/^(?:difficulty|level)\s*:/i, '').trim().toLowerCase();
+          if (diffStr === 'easy' || diffStr === 'hard') difficulty = diffStr;
+          else difficulty = 'medium';
           continue;
         }
 
@@ -254,6 +265,7 @@ export function parseMarkdownQuestions(
 
       result.questions.push({
         type,
+        difficulty,
         question: questionText,
         points: points || 1,
         subject,

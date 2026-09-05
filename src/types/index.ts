@@ -64,6 +64,8 @@ export interface StudentDetail {
 
 export type QuestionType = 'mcq' | 'structure' | 'fill_in_blank' | 'fill_blank' | 'matching';
 
+export type QuestionDifficulty = 'easy' | 'medium' | 'hard';
+
 export interface MatchingPair {
   id: string;
   left: string;
@@ -73,6 +75,8 @@ export interface MatchingPair {
 export interface QuizQuestion {
   id: string;
   type?: QuestionType; // defaults to 'mcq'
+  difficulty?: QuestionDifficulty;
+  topic?: string;
   question: string;
   points?: number; // defaults to 1
   options?: string[]; // for MCQ
@@ -89,6 +93,7 @@ export interface QuizQuestion {
 export interface QuestionBankItem {
   id: string;
   type: QuestionType;
+  difficulty?: QuestionDifficulty;
   subject: Subject;
   gradeLevel: string;
   topic: string;
@@ -122,6 +127,8 @@ export interface Quiz {
   timeLimitMinutes: number;
   maxAttempts?: number; // 0 = unlimited, 1 = single attempt (default), 2, 3 etc.
   markingMode?: MarkingMode; // 'auto' = auto-grades objective questions immediately, 'manual' = teacher reviews/releases
+  shuffleQuestions?: boolean; // Anti-cheating: randomizes question sequence per student
+  shuffleOptions?: boolean; // Anti-cheating: randomizes MCQ choices per student
   totalPoints?: number;
   questions: QuizQuestion[];
   dueDate: string;
@@ -197,3 +204,33 @@ export interface SchoolInfo {
   website?: string;
   description?: string;
 }
+
+export interface GradingRubricPreset {
+  id: string;
+  title: string;
+  points: number;
+  criteria: string;
+  feedbackTemplate: string;
+}
+
+export interface ParentAlert {
+  id: string;
+  studentId: string;
+  studentName: string;
+  parentId?: string;
+  parentName: string;
+  parentPhone?: string;
+  parentEmail?: string;
+  quizId: string;
+  quizTitle: string;
+  subject: string;
+  score: number;
+  totalPoints: number;
+  percentage: number;
+  teacherFeedback?: string;
+  channel: 'whatsapp' | 'email' | 'both';
+  messageText: string;
+  status: 'sent' | 'pending';
+  sentAt: string;
+}
+
