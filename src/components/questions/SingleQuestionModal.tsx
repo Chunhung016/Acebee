@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QuestionBankItem, QuestionType, Subject, MatchingPair, QuestionDifficulty } from '../../types';
 import { MathToolbar, MathLivePreview, MathText } from '../common/MathRenderer';
+import { getSubjectsForLevel } from '../../utils/subjectHelper';
 import {
   X,
   Plus,
@@ -10,6 +11,8 @@ import {
   BookOpen,
   Hash,
   ArrowRight,
+  Image as ImageIcon,
+  Upload,
 } from 'lucide-react';
 
 interface SingleQuestionModalProps {
@@ -21,18 +24,7 @@ interface SingleQuestionModalProps {
   defaultGrade?: string;
 }
 
-const SUBJECT_LIST: Subject[] = [
-  'Mathematics',
-  'Science',
-  'English',
-  'Bahasa Melayu',
-  'History',
-  'Geography',
-  'Art',
-  'Physical Education',
-];
-
-const GRADE_LEVELS = ['Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6', 'Form 1', 'Form 2', 'Form 3', 'Form 4', 'Form 5'];
+const GRADE_LEVELS = ['Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6', 'Form 1', 'Form 2', 'Form 3'];
 
 export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
   isOpen,
@@ -49,8 +41,11 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
   const [topic, setTopic] = useState<string>('');
   const [tags, setTags] = useState<string>('');
   const [question, setQuestion] = useState<string>('');
+  const [imageUrl, setImageUrl] = useState<string>('');
   const [points, setPoints] = useState<number>(1);
   const [explanation, setExplanation] = useState<string>('');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // MCQ state
   const [options, setOptions] = useState<string[]>(['', '', '', '']);
@@ -71,6 +66,15 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
     { left: '', right: '' },
   ]);
 
+  // Dynamically update available subjects based on grade level
+  const availableSubjects = getSubjectsForLevel(gradeLevel);
+
+  useEffect(() => {
+    if (availableSubjects.length > 0 && !availableSubjects.includes(subject)) {
+      setSubject(availableSubjects[0]);
+    }
+  }, [gradeLevel, availableSubjects, subject]);
+
   useEffect(() => {
     if (editingItem) {
       setType(editingItem.type);
@@ -80,6 +84,7 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
       setTopic(editingItem.topic || '');
       setTags(editingItem.tags ? editingItem.tags.join(', ') : '');
       setQuestion(editingItem.question);
+      setImageUrl(editingItem.imageUrl || '');
       setPoints(editingItem.points || 1);
       setExplanation(editingItem.explanation || '');
 
@@ -98,6 +103,7 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
       setTopic('');
       setTags('');
       setQuestion('');
+      setImageUrl('');
       setPoints(1);
       setExplanation('');
       setOptions(['', '', '', '']);
@@ -113,6 +119,17 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
       ]);
     }
   }, [editingItem, isOpen, defaultSubject, defaultGrade]);
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -172,6 +189,7 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
       topic: topic.trim() || 'General',
       tags: parsedTags,
       question: question.trim(),
+      imageUrl: imageUrl.trim() || undefined,
       points: Number(points) || 1,
       explanation: explanation.trim() || undefined,
     };
@@ -259,7 +277,7 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
                 onChange={(e) => setSubject(e.target.value as Subject)}
                 className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {SUBJECT_LIST.map((s) => (
+                {availableSubjects.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>
@@ -349,6 +367,69 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
 
             {/* Math Live Preview */}
             <MathLivePreview rawText={question} />
+          </div>
+
+          {/* Question Image (Optional) */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-slate-500" />
+                Question Image (Optional)
+              </label>
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setImageUrl('')}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Remove Image
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Provide an illustrative diagram, mathematical chart, or visual aid for this question.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              {/* File Uploader */}
+              <div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageFileChange}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-white border border-slate-200 hover:border-blue-500 hover:bg-blue-50 text-slate-700 hover:text-blue-800 text-xs font-semibold rounded-lg shadow-xs transition-all cursor-pointer"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload Local Image
+                </button>
+              </div>
+
+              {/* URL Input */}
+              <input
+                type="text"
+                value={imageUrl.startsWith('data:') ? '' : imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="Or paste direct image URL..."
+                className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {imageUrl && (
+              <div className="mt-2 relative rounded-lg overflow-hidden border border-slate-200 max-h-[160px] flex items-center justify-center bg-slate-100">
+                <img
+                  src={imageUrl}
+                  alt="Question Aid Preview"
+                  className="max-h-[150px] object-contain animate-in fade-in duration-100"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            )}
           </div>
 
           {/* TYPE-SPECIFIC FIELDS */}

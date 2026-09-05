@@ -408,6 +408,18 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({ onCreateQuiz
                         <MathText text={q.question} inline={false} />
                       </h4>
 
+                      {/* Question Visual aid */}
+                      {q.imageUrl && (
+                        <div className="my-2.5 max-w-[240px] rounded-lg border border-slate-200 overflow-hidden bg-slate-50 flex items-center justify-center p-1 shadow-2xs">
+                          <img
+                            src={q.imageUrl}
+                            alt="Visual aid"
+                            className="max-h-[140px] object-contain rounded"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      )}
+
                       {/* Type-Specific Preview */}
                       {q.type === 'mcq' && q.options && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">

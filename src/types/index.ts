@@ -79,6 +79,7 @@ export interface QuizQuestion {
   topic?: string;
   question: string;
   points?: number; // defaults to 1
+  imageUrl?: string; // image for the question (uploaded or url)
   options?: string[]; // for MCQ
   correctAnswerIndex?: number; // for MCQ
   modelAnswer?: string; // for Structure
@@ -100,6 +101,7 @@ export interface QuestionBankItem {
   tags?: string[];
   question: string;
   points: number;
+  imageUrl?: string; // image for the question (uploaded or url)
   options?: string[];
   correctAnswerIndex?: number;
   modelAnswer?: string;
@@ -140,6 +142,7 @@ export interface QuizAnswerRecord {
   type?: QuestionType;
   selectedOption?: number; // for MCQ
   textAnswer?: string; // for Structure & Fill in Blank
+  studentAttachmentUrl?: string; // submitted image/file for essay or structure questions
   matchingAnswers?: Record<string, string>; // pairId -> selected right item for Matching
   isCorrect?: boolean;
   pointsAwarded?: number;

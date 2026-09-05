@@ -222,16 +222,17 @@ function renderInlineMath(text: string): string {
   // Pre-process natural math to $...$
   const preprocessed = convertNaturalMathToLatex(text);
 
-  // Match inline math: $...$ or \(...\)
+  // Match inline math: $...$ or \(...\).
+  // Using [^\$\n] to prevent runaway matching across paragraphs while remaining inline.
   const inlineRegex = /(\$[^\$\n]+?\$|\\\([^\n]+?\\\))/g;
 
-  if (!inlineRegex.test(preprocessed)) {
-    // If no math was identified, return escaped text with linebreaks preserved
+  const chunks = preprocessed.split(inlineRegex);
+  if (chunks.length === 1) {
+    // If no split occurred, return simple escaped text
     return escapeHtml(text).replace(/\n/g, '<br/>');
   }
 
-  return preprocessed
-    .split(inlineRegex)
+  return chunks
     .map((chunk) => {
       if (chunk.startsWith('$') && chunk.endsWith('$')) {
         const math = chunk.slice(1, -1).trim();

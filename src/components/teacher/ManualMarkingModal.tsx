@@ -286,6 +286,22 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
                       </div>
                     </div>
 
+                    {answerRecord?.studentAttachmentUrl && (
+                      <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-1.5">
+                        <span className="text-[10px] font-bold text-purple-950 uppercase tracking-wider block">
+                          Student's Uploaded Attachment / Calculation Photo:
+                        </span>
+                        <div className="rounded-lg border border-purple-200/60 overflow-hidden bg-white max-h-[240px] flex items-center justify-center p-1">
+                          <img
+                            src={answerRecord.studentAttachmentUrl}
+                            alt="Student handwritten work attachment"
+                            className="max-h-[220px] object-contain rounded-md"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     {(q.modelAnswer || q.guidelines) && (
                       <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1 text-slate-700">
                         {q.modelAnswer && (

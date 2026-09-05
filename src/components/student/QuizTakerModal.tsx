@@ -18,6 +18,9 @@ import {
   Check,
   FileText,
   Layers,
+  Image as ImageIcon,
+  Upload,
+  Trash2,
 } from 'lucide-react';
 
 interface QuizTakerModalProps {
@@ -54,6 +57,7 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
   const [mcqAnswers, setMcqAnswers] = useState<Record<string, number>>({});
   const [textAnswers, setTextAnswers] = useState<Record<string, string>>({});
   const [matchingAnswers, setMatchingAnswers] = useState<Record<string, Record<string, string>>>({});
+  const [studentAttachments, setStudentAttachments] = useState<Record<string, string>>({});
 
   const [timeLeft, setTimeLeft] = useState<number>((quiz.timeLimitMinutes || 15) * 60);
   const [timeExpired, setTimeExpired] = useState(false);
@@ -150,10 +154,12 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
 
       if (q.type === 'structure') {
         const txt = textAnswers[q.id] || '';
+        const attachmentUrl = studentAttachments[q.id] || '';
         // For structure, if manual marking mode, awarded points are 0 until reviewed
         return {
           questionId: q.id,
           textAnswer: txt,
+          studentAttachmentUrl: attachmentUrl,
           isCorrect: false,
           pointsAwarded: 0,
           maxPoints: qPoints,
@@ -413,6 +419,17 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                 </h4>
               </div>
 
+              {currentQ.imageUrl && (
+                <div className="my-4 rounded-xl border border-slate-200 overflow-hidden max-h-[300px] flex items-center justify-center bg-slate-50 p-2 shadow-xs">
+                  <img
+                    src={currentQ.imageUrl}
+                    alt="Question Aid"
+                    className="max-h-[280px] object-contain rounded-lg animate-in fade-in duration-200"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
+
               {/* QUESTION INPUTS ACCORDING TO TYPE */}
 
               {/* 1. MCQ OPTIONS */}
@@ -478,6 +495,77 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                     placeholder="Type your structured answer here in complete sentences. Detail your reasoning, calculations, or steps..."
                     className="w-full p-3.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
                   />
+
+                  {/* Student Hand-written Image Upload Option */}
+                  <div className="mt-3 p-3.5 bg-purple-50/40 rounded-xl border border-purple-100/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                        <ImageIcon className="w-4 h-4 text-purple-600" />
+                        Submit Written Work Photo (Optional)
+                      </span>
+                      {studentAttachments[currentQ.id] && (
+                        <button
+                          type="button"
+                          onClick={() => setStudentAttachments((prev) => ({ ...prev, [currentQ.id]: '' }))}
+                          className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" /> Clear Image
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Write calculations, math formulas, or essays on paper? Click below to snap a photo or upload it so your teacher can see and mark your work.
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="file"
+                        id={`student-upload-${currentQ.id}`}
+                        className="hidden"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const r = new FileReader();
+                            r.onloadend = () => {
+                              setStudentAttachments((prev) => ({ ...prev, [currentQ.id]: r.result as string }));
+                            };
+                            r.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`student-upload-${currentQ.id}`}
+                        className="flex items-center gap-2 py-2 px-3.5 bg-white border border-purple-200 hover:border-purple-400 hover:bg-purple-100 text-purple-950 text-xs font-bold rounded-lg cursor-pointer transition-all shadow-xs"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-purple-700" />
+                        Upload Written Work
+                      </label>
+
+                      <input
+                        type="text"
+                        value={studentAttachments[currentQ.id]?.startsWith('data:') ? '' : (studentAttachments[currentQ.id] || '')}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setStudentAttachments((prev) => ({ ...prev, [currentQ.id]: val }));
+                        }}
+                        placeholder="Or paste photo URL..."
+                        className="flex-1 min-w-[150px] text-xs p-1.5 rounded-lg border border-purple-200 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                      />
+                    </div>
+
+                    {studentAttachments[currentQ.id] && (
+                      <div className="mt-2.5 relative rounded-lg overflow-hidden border border-purple-200 max-h-[160px] flex items-center justify-center bg-white p-1">
+                        <img
+                          src={studentAttachments[currentQ.id]}
+                          alt="Student Handwritten Attachment"
+                          className="max-h-[150px] object-contain rounded-md"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <p className="text-[11px] text-slate-400">
                     💡 Tip: Teacher will evaluate your answer against the rubric guidelines and award full or partial credit.
                   </p>
