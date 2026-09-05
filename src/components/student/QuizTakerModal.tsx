@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { Quiz, QuizQuestion, QuizResult, StudentAnswerRecord } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { MathText } from '../common/MathRenderer';
 import {
   X,
   Clock,
@@ -408,7 +409,7 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                   </span>
                 </div>
                 <h4 className="text-base font-bold text-slate-900 leading-snug">
-                  {currentQ.question}
+                  <MathText text={currentQ.question} inline={false} />
                 </h4>
               </div>
 
@@ -434,15 +435,17 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                       >
                         <div className="flex items-center gap-3">
                           <span
-                            className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${
+                            className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
                               isSelected ? 'bg-blue-900 text-white' : 'bg-slate-200 text-slate-600'
                             }`}
                           >
                             {String.fromCharCode(65 + idx)}
                           </span>
-                          <span>{option}</span>
+                          <span className="leading-relaxed">
+                            <MathText text={option} />
+                          </span>
                         </div>
-                        {isSelected && <Check className="w-4 h-4 text-blue-600" />}
+                        {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
                       </button>
                     );
                   })}
@@ -518,10 +521,10 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                           className="p-3 rounded-xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                         >
                           <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[11px] flex items-center justify-center">
+                            <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[11px] flex items-center justify-center shrink-0">
                               {pIdx + 1}
                             </span>
-                            <span>{pair.left}</span>
+                            <span><MathText text={pair.left} /></span>
                           </div>
 
                           <div className="flex items-center gap-2 sm:w-1/2">
@@ -614,35 +617,44 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                         }`}
                       >
                         <div className="flex items-center justify-between font-bold">
-                          <span className="text-slate-900">
-                            {idx + 1}. {q.question}
+                          <span className="text-slate-900 leading-snug">
+                            {idx + 1}. <MathText text={q.question} />
                           </span>
-                          <span className={isCorrect ? 'text-emerald-700' : 'text-rose-600'}>
+                          <span className={isCorrect ? 'text-emerald-700 shrink-0 ml-2' : 'text-rose-600 shrink-0 ml-2'}>
                             {isCorrect ? '✓ Correct' : '✗ Incorrect'}
                           </span>
                         </div>
 
                         {(!q.type || q.type === 'mcq') && q.options && (
-                          <div className="text-slate-600">
-                            Your answer:{' '}
-                            <strong>
-                              {ans?.selectedOption !== undefined && ans.selectedOption >= 0
-                                ? q.options[ans.selectedOption]
-                                : 'No answer'}
-                            </strong>
+                          <div className="text-slate-600 space-y-1">
+                            <div>
+                              Your answer:{' '}
+                              <strong>
+                                {ans?.selectedOption !== undefined && ans.selectedOption >= 0 ? (
+                                  <MathText text={q.options[ans.selectedOption]} />
+                                ) : (
+                                  'No answer'
+                                )}
+                              </strong>
+                            </div>
                             {!isCorrect && q.correctAnswerIndex !== undefined && (
-                              <div className="text-emerald-800 mt-0.5">
-                                Correct answer: <strong>{q.options[q.correctAnswerIndex]}</strong>
+                              <div className="text-emerald-800">
+                                Correct answer:{' '}
+                                <strong>
+                                  <MathText text={q.options[q.correctAnswerIndex]} />
+                                </strong>
                               </div>
                             )}
                           </div>
                         )}
 
                         {q.type === 'fill_in_blank' && (
-                          <div className="text-slate-600">
-                            Your answer: <strong>"{ans?.textAnswer || ''}"</strong>
+                          <div className="text-slate-600 space-y-1">
+                            <div>
+                              Your answer: <strong>"{ans?.textAnswer || ''}"</strong>
+                            </div>
                             {!isCorrect && (
-                              <div className="text-emerald-800 mt-0.5">
+                              <div className="text-emerald-800">
                                 Accepted:{' '}
                                 <strong>{q.acceptableAnswers?.join(', ')}</strong>
                               </div>
@@ -651,9 +663,12 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                         )}
 
                         {q.explanation && (
-                          <p className="text-slate-500 italic text-[11px] pt-1 border-t border-slate-200/40">
-                            💡 {q.explanation}
-                          </p>
+                          <div className="text-slate-600 text-[11px] pt-1.5 border-t border-slate-200/50 flex items-start gap-1">
+                            <span className="shrink-0">💡</span>
+                            <div>
+                              <MathText text={q.explanation} />
+                            </div>
+                          </div>
                         )}
                       </div>
                     );

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
+import { MathText } from '../common/MathRenderer';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -530,21 +531,27 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
                             )}
                           </div>
 
-                          <p className="font-bold text-slate-900">{q.questionText}</p>
+                          <div className="font-bold text-slate-900 leading-snug">
+                            <MathText text={q.questionText} />
+                          </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                             <div className="p-2 rounded-lg bg-rose-50 border border-rose-200">
                               <span className="text-[10px] font-bold text-rose-800 uppercase block">
                                 Your Submission:
                               </span>
-                              <span className="text-rose-950 font-medium">{q.studentResponse}</span>
+                              <div className="text-rose-950 font-medium">
+                                <MathText text={q.studentResponse} />
+                              </div>
                             </div>
 
                             <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200">
                               <span className="text-[10px] font-bold text-emerald-800 uppercase block">
                                 Correct Answer:
                               </span>
-                              <span className="text-emerald-950 font-semibold">{q.correctAnswer}</span>
+                              <div className="text-emerald-950 font-semibold">
+                                <MathText text={q.correctAnswer} />
+                              </div>
                             </div>
                           </div>
 
@@ -553,7 +560,9 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
                               <span className="font-bold flex items-center gap-1">
                                 <Sparkles className="w-3.5 h-3.5 text-blue-600" /> Key Concept / Explanation:
                               </span>
-                              <p className="text-slate-700 leading-relaxed">{q.explanation}</p>
+                              <div className="text-slate-700 leading-relaxed">
+                                <MathText text={q.explanation} />
+                              </div>
                             </div>
                           )}
                         </div>

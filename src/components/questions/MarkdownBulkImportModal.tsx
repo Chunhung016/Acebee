@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { parseMarkdownQuestions, SAMPLE_MARKDOWN_TEMPLATES, ParsedQuestionDraft } from '../../utils/markdownQuestionParser';
 import { Subject, QuestionType } from '../../types';
+import { MathText, MathToolbar } from '../common/MathRenderer';
 import {
   FileText,
   Sparkles,
@@ -132,8 +133,8 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
         {/* Content Body: Split Screen (Editor & Live Parsed Preview) */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 overflow-hidden min-h-[380px]">
           {/* Left Column: Markdown Editor */}
-          <div className="flex flex-col p-4 bg-white overflow-hidden">
-            <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col p-4 bg-white overflow-hidden gap-2">
+            <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
                 Markdown Key-In Editor
               </label>
@@ -141,6 +142,15 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
                 {markdownText.split('\n').length} lines
               </div>
             </div>
+
+            {/* Math quick tool buttons */}
+            <MathToolbar
+              compact
+              onInsert={(snippet) => {
+                setMarkdownText((prev) => prev + snippet);
+              }}
+            />
+
             <textarea
               value={markdownText}
               onChange={(e) => setMarkdownText(e.target.value)}
@@ -245,9 +255,9 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
                       </span>
                     </div>
 
-                    <p className="text-xs font-semibold text-slate-900 leading-snug">
-                      {q.question}
-                    </p>
+                    <div className="text-xs font-semibold text-slate-900 leading-snug">
+                      <MathText text={q.question} inline={false} />
+                    </div>
 
                     {/* MCQ Options preview */}
                     {q.type === 'mcq' && q.options && (
@@ -264,7 +274,9 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
                             <span className="w-4 h-4 rounded-full bg-white border border-slate-300 text-[9px] font-bold flex items-center justify-center shrink-0">
                               {String.fromCharCode(65 + oIdx)}
                             </span>
-                            <span className="truncate">{opt}</span>
+                            <span className="truncate leading-relaxed">
+                              <MathText text={opt} />
+                            </span>
                             {oIdx === q.correctAnswerIndex && (
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 ml-auto shrink-0" />
                             )}
@@ -277,9 +289,9 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
                     {q.type === 'structure' && (
                       <div className="p-2 bg-purple-50/60 rounded border border-purple-100 text-[11px] text-purple-900 space-y-1">
                         {q.modelAnswer && (
-                          <p>
-                            <strong>Model Answer:</strong> {q.modelAnswer}
-                          </p>
+                          <div>
+                            <strong>Model Answer:</strong> <MathText text={q.modelAnswer} />
+                          </div>
                         )}
                         {q.guidelines && (
                           <p className="text-[10px] text-purple-700">
@@ -304,18 +316,18 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
                             key={pIdx}
                             className="flex items-center justify-between p-1.5 bg-amber-50/60 border border-amber-200/80 rounded text-[11px] text-amber-950"
                           >
-                            <span className="font-medium">{pair.left}</span>
+                            <span className="font-medium"><MathText text={pair.left} /></span>
                             <ArrowRight className="w-3 h-3 text-amber-600 mx-2 shrink-0" />
-                            <span className="font-semibold text-amber-800">{pair.right}</span>
+                            <span className="font-semibold text-amber-800"><MathText text={pair.right} /></span>
                           </div>
                         ))}
                       </div>
                     )}
 
                     {q.explanation && (
-                      <p className="text-[10px] text-slate-500 italic bg-slate-50 p-1.5 rounded">
-                        <strong>Explanation:</strong> {q.explanation}
-                      </p>
+                      <div className="text-[10px] text-slate-500 italic bg-slate-50 p-1.5 rounded flex items-center gap-1">
+                        <strong>Explanation:</strong> <MathText text={q.explanation} />
+                      </div>
                     )}
                   </div>
                 ))

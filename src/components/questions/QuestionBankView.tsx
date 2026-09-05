@@ -4,6 +4,7 @@ import { QuestionBankItem, QuestionType, Subject, QuestionDifficulty } from '../
 import { MarkdownBulkImportModal } from './MarkdownBulkImportModal';
 import { SingleQuestionModal } from './SingleQuestionModal';
 import { ParsedQuestionDraft } from '../../utils/markdownQuestionParser';
+import { MathText } from '../common/MathRenderer';
 import {
   Search,
   Filter,
@@ -404,7 +405,7 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({ onCreateQuiz
 
                       {/* Question Text */}
                       <h4 className="text-sm font-semibold text-slate-900 leading-snug">
-                        {q.question}
+                        <MathText text={q.question} inline={false} />
                       </h4>
 
                       {/* Type-Specific Preview */}
@@ -422,7 +423,9 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({ onCreateQuiz
                               <span className="w-5 h-5 rounded-full bg-white border border-slate-300 text-[10px] font-bold flex items-center justify-center shrink-0">
                                 {String.fromCharCode(65 + oIdx)}
                               </span>
-                              <span className="truncate">{opt}</span>
+                              <span className="truncate leading-relaxed">
+                                <MathText text={opt} />
+                              </span>
                               {oIdx === q.correctAnswerIndex && (
                                 <CheckCircle2 className="w-4 h-4 text-emerald-600 ml-auto shrink-0" />
                               )}
@@ -434,9 +437,9 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({ onCreateQuiz
                       {q.type === 'structure' && (
                         <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100 text-xs text-purple-900 space-y-1">
                           {q.modelAnswer && (
-                            <p>
-                              <strong>Model Answer / Scheme:</strong> {q.modelAnswer}
-                            </p>
+                            <div>
+                              <strong>Model Answer / Scheme:</strong> <MathText text={q.modelAnswer} />
+                            </div>
                           )}
                           {q.guidelines && (
                             <p className="text-[11px] text-purple-700">
@@ -493,8 +496,8 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({ onCreateQuiz
                               </span>
                             ))}
                           {q.explanation && (
-                            <span className="italic text-slate-500">
-                              Note: {q.explanation}
+                            <span className="italic text-slate-500 flex items-center gap-1">
+                              Note: <MathText text={q.explanation} />
                             </span>
                           )}
                         </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Quiz, QuizResult, QuizQuestion, User } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { MathText } from '../common/MathRenderer';
 import {
   X,
   CheckCircle2,
@@ -213,7 +214,9 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
                         Max: {maxPoints} {maxPoints === 1 ? 'pt' : 'pts'}
                       </span>
                     </div>
-                    <h4 className="text-xs font-bold text-slate-900">{q.question}</h4>
+                    <h4 className="text-xs font-bold text-slate-900 leading-snug">
+                      <MathText text={q.question} inline={false} />
+                    </h4>
                   </div>
 
                   {/* Award points control */}
@@ -247,17 +250,20 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
                     >
                       {answerRecord?.selectedOption !== undefined &&
                       answerRecord.selectedOption >= 0 &&
-                      q.options[answerRecord.selectedOption]
-                        ? `${String.fromCharCode(65 + answerRecord.selectedOption)}. ${
-                            q.options[answerRecord.selectedOption]
-                          }`
-                        : 'No answer chosen'}
+                      q.options[answerRecord.selectedOption] ? (
+                        <div className="flex items-center gap-1">
+                          <span>{String.fromCharCode(65 + answerRecord.selectedOption)}.</span>
+                          <MathText text={q.options[answerRecord.selectedOption]} />
+                        </div>
+                      ) : (
+                        'No answer chosen'
+                      )}
                     </div>
                     {!answerRecord?.isCorrect && q.correctAnswerIndex !== undefined && (
-                      <div className="text-[11px] text-emerald-800">
-                        Correct Option:{' '}
+                      <div className="text-[11px] text-emerald-800 flex items-center gap-1">
+                        <span>Correct Option:</span>
                         <strong>
-                          {String.fromCharCode(65 + q.correctAnswerIndex)}. {q.options[q.correctAnswerIndex]}
+                          {String.fromCharCode(65 + q.correctAnswerIndex)}. <MathText text={q.options[q.correctAnswerIndex]} />
                         </strong>
                       </div>
                     )}
@@ -271,19 +277,21 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
                       <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider">
                         Student's Submitted Written Response:
                       </span>
-                      <p className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed font-sans">
-                        {answerRecord?.textAnswer || (
+                      <div className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed font-sans">
+                        {answerRecord?.textAnswer ? (
+                          <MathText text={answerRecord.textAnswer} inline={false} />
+                        ) : (
                           <span className="italic text-slate-400">No response provided</span>
                         )}
-                      </p>
+                      </div>
                     </div>
 
                     {(q.modelAnswer || q.guidelines) && (
                       <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1 text-slate-700">
                         {q.modelAnswer && (
-                          <div>
-                            <strong className="text-slate-900">Marking Scheme / Model: </strong>
-                            <span>{q.modelAnswer}</span>
+                          <div className="flex items-start gap-1">
+                            <strong className="text-slate-900 shrink-0">Marking Scheme / Model: </strong>
+                            <span><MathText text={q.modelAnswer} /></span>
                           </div>
                         )}
                         {q.guidelines && (
@@ -323,14 +331,14 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
                           key={pIdx}
                           className="flex items-center justify-between p-1.5 rounded bg-white border border-amber-200"
                         >
-                          <span className="font-medium text-slate-800">{pair.left}</span>
+                          <span className="font-medium text-slate-800"><MathText text={pair.left} /></span>
                           <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
                           <span className={isPairMatch ? 'text-emerald-700 font-bold' : 'text-rose-700 font-bold'}>
-                            {studentPair?.right || 'Unmatched'}
+                            {studentPair?.right ? <MathText text={studentPair.right} /> : 'Unmatched'}
                           </span>
                           {!isPairMatch && (
                             <span className="text-[10px] text-emerald-800">
-                              (Expected: {pair.right})
+                              (Expected: <MathText text={pair.right} />)
                             </span>
                           )}
                         </div>

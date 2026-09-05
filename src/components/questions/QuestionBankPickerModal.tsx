@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { QuestionBankItem, QuizQuestion, Subject } from '../../types';
+import { MathText } from '../common/MathRenderer';
 import {
   Search,
   Filter,
@@ -185,13 +186,19 @@ export const QuestionBankPickerModal: React.FC<QuestionBankPickerModalProps> = (
                       </span>
                     </div>
 
-                    <p className="text-xs font-semibold text-slate-900 leading-snug">
-                      {item.question}
-                    </p>
+                    <div className="text-xs font-semibold text-slate-900 leading-snug">
+                      <MathText text={item.question} />
+                    </div>
 
                     {item.type === 'mcq' && item.options && (
-                      <div className="text-[11px] text-slate-500 line-clamp-1">
-                        Options: {item.options.join(' | ')}
+                      <div className="text-[11px] text-slate-500 line-clamp-1 flex items-center gap-1">
+                        <span>Options:</span>
+                        {item.options.map((opt, oIdx) => (
+                          <span key={oIdx} className="inline-flex items-center">
+                            {oIdx > 0 && <span className="mx-1 text-slate-300">|</span>}
+                            <MathText text={opt} />
+                          </span>
+                        ))}
                       </div>
                     )}
                     {item.type === 'structure' && item.modelAnswer && (

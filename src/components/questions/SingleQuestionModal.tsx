@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { QuestionBankItem, QuestionType, Subject, MatchingPair, QuestionDifficulty } from '../../types';
+import { MathToolbar, MathLivePreview, MathText } from '../common/MathRenderer';
 import {
   X,
   Plus,
@@ -319,18 +320,35 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
           </div>
 
           {/* Question Text */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Question Prompt / Description *
-            </label>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Question Prompt / Description *
+              </label>
+              <span className="text-[11px] text-slate-400">
+                Supports LaTeX: <code className="text-blue-700">\frac{'{'}a{'}'}{'{'}b{'}'}</code>, <code className="text-blue-700">\sqrt{'{'}x{'}'}</code>, or natural <code className="text-blue-700">3/8</code>, <code className="text-blue-700">x^2</code>
+              </span>
+            </div>
+
+            {/* Quick Math Tools */}
+            <MathToolbar
+              compact
+              onInsert={(snippet) => {
+                setQuestion((prev) => prev + snippet);
+              }}
+            />
+
             <textarea
               required
               rows={3}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Enter the question text here..."
+              placeholder="Enter the question text here... (e.g. Find the value of 3/8 + 2/5 or simplify sqrt(75))"
               className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+
+            {/* Math Live Preview */}
+            <MathLivePreview rawText={question} />
           </div>
 
           {/* TYPE-SPECIFIC FIELDS */}
@@ -403,6 +421,7 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
                   placeholder="Expected answer or key points teacher will check..."
                   className="w-full text-xs p-2 rounded-lg border border-purple-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
+                <MathLivePreview rawText={modelAnswer} label="Model Answer Math Preview" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
