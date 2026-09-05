@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { parseMarkdownQuestions, SAMPLE_MARKDOWN_TEMPLATES, ParsedQuestionDraft } from '../../utils/markdownQuestionParser';
-import { Subject, QuestionType } from '../../types';
+import { Subject, QuestionType, QuizQuestion } from '../../types';
 import { MathText, MathToolbar } from '../common/MathRenderer';
 import {
   FileText,
@@ -13,12 +13,14 @@ import {
   Copy,
   Layers,
   ArrowRight,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 interface MarkdownBulkImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (questions: ParsedQuestionDraft[]) => void;
+  onImport?: (questions: ParsedQuestionDraft[]) => void;
+  onImportQuestions?: (questions: QuizQuestion[]) => void;
   targetContext?: 'bank' | 'quiz';
   defaultSubject?: Subject;
   defaultGrade?: string;
@@ -28,6 +30,7 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
   isOpen,
   onClose,
   onImport,
+  onImportQuestions,
   targetContext = 'bank',
   defaultSubject = 'Mathematics',
   defaultGrade = 'Year 5',
@@ -50,7 +53,34 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
 
   const handleConfirmImport = () => {
     if (parseResult.questions.length === 0) return;
-    onImport(parseResult.questions);
+
+    if (onImport) {
+      onImport(parseResult.questions);
+    }
+
+    if (onImportQuestions) {
+      const converted: QuizQuestion[] = parseResult.questions.map((q, idx) => ({
+        id: `q-bulk-${Date.now()}-${idx}`,
+        type: q.type,
+        difficulty: q.difficulty || 'medium',
+        topic: q.topic || 'General',
+        question: q.question,
+        points: q.points || 1,
+        imageUrl: q.imageUrl,
+        options: q.options,
+        correctAnswerIndex: q.correctAnswerIndex,
+        modelAnswer: q.modelAnswer,
+        guidelines: q.guidelines,
+        acceptableAnswers: q.acceptableAnswers,
+        caseSensitive: q.caseSensitive,
+        matchingPairs: q.matchingPairs
+          ? q.matchingPairs.map((p, pIdx) => ({ id: `pair-${pIdx}`, left: p.left, right: p.right }))
+          : undefined,
+        explanation: q.explanation,
+      }));
+      onImportQuestions(converted);
+    }
+
     onClose();
   };
 
@@ -292,6 +322,17 @@ export const MarkdownBulkImportModal: React.FC<MarkdownBulkImportModalProps> = (
                     <div className="text-xs font-semibold text-slate-900 leading-snug">
                       <MathText text={q.question} inline={false} />
                     </div>
+
+                    {q.imageUrl && (
+                      <div className="my-1.5 rounded-lg border border-slate-200 overflow-hidden max-h-[140px] flex items-center justify-center bg-slate-100 p-1">
+                        <img
+                          src={q.imageUrl}
+                          alt="Question visual aid"
+                          className="max-h-[130px] object-contain rounded"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
 
                     {/* MCQ Options preview */}
                     {q.type === 'mcq' && q.options && (

@@ -1,4 +1,5 @@
-import { QuestionType, Subject, QuestionBankItem, QuizQuestion, QuestionDifficulty } from '../types';
+import { QuestionType, Subject, QuestionDifficulty } from '../types';
+import { ALL_ACEBEE_SUBJECTS } from './subjectHelper';
 
 export interface ParsedQuestionDraft {
   type: QuestionType;
@@ -8,6 +9,7 @@ export interface ParsedQuestionDraft {
   subject: Subject;
   gradeLevel: string;
   topic: string;
+  imageUrl?: string;
   options?: string[];
   correctAnswerIndex?: number;
   modelAnswer?: string;
@@ -26,6 +28,14 @@ export interface ParseResult {
 const DEFAULT_SUBJECT: Subject = 'Mathematics';
 const DEFAULT_GRADE = 'Year 5';
 
+const KNOWN_SUBJECTS: string[] = [
+  ...ALL_ACEBEE_SUBJECTS,
+  'Social Studies',
+  'Art & Technology',
+  'History',
+  'Geography',
+];
+
 export function parseMarkdownQuestions(
   markdownText: string,
   fallbackSubject: Subject = DEFAULT_SUBJECT,
@@ -40,15 +50,22 @@ export function parseMarkdownQuestions(
     return result;
   }
 
-  // Split questions either by `###` or `---` or double blank line followed by Question marker
-  const rawBlocks = markdownText
-    .split(/\n(?=###|\n---\n|\n={3,}\n)/g)
+  // Normalize line endings
+  const cleanText = markdownText.replace(/\r\n/g, '\n').trim();
+
+  // Split question blocks flexibly by header markers (###, ##, #), divider lines (---, ===), or blank lines followed by question/type markers
+  const rawBlocks = cleanText
+    .split(/\n+(?=(?:#{1,4}\s+|[-=_]{3,}|(?:MCQ|Structure|Structured|FillInBlank|Fill-in-the-blank|Blank|Matching|Match|Q\d+|Question\s*\d+)))/gi)
     .map((b) => b.trim())
     .filter((b) => b.length > 0);
 
   rawBlocks.forEach((block, index) => {
     try {
-      const lines = block.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+      // If block starts with a divider like --- or ===, strip it
+      const processedBlock = block.replace(/^[-=_]{3,}\n?/, '').trim();
+      if (!processedBlock) return;
+
+      const lines = processedBlock.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
       if (lines.length === 0) return;
 
       let type: QuestionType = 'mcq';
@@ -57,6 +74,7 @@ export function parseMarkdownQuestions(
       let topic = 'General';
       let difficulty: QuestionDifficulty = 'medium';
       let points = 1;
+      let imageUrl: string | undefined = undefined;
       let explanation = '';
       let modelAnswer = '';
       let guidelines = '';
@@ -67,11 +85,12 @@ export function parseMarkdownQuestions(
       const matchingPairs: Array<{ id: string; left: string; right: string }> = [];
 
       let questionLines: string[] = [];
-      let currentSection: 'header' | 'question' | 'options' | 'matching' | 'other' = 'header';
 
       // Inspect first line / header
       const firstLine = lines[0];
-      const headerMatch = firstLine.match(/^(?:###|##|#)?\s*(MCQ|Structure|Structured|FillInBlank|Fill in blank|Fill-in-the-blank|Blank|Matching|Match)\b(.*)$/i);
+      const headerMatch = firstLine.match(
+        /^(?:#{1,4}|\d+[\.\)]|\*{1,2})?\s*(MCQ|Structure|Structured|FillInBlank|Fill in blank|Fill-in-the-blank|Blank|Matching|Match|Q\d+|Question\d*)\b(.*)$/i
+      );
 
       let startIndex = 0;
       if (headerMatch) {
@@ -84,18 +103,23 @@ export function parseMarkdownQuestions(
 
         const metadataPart = headerMatch[2];
         if (metadataPart) {
-          const parts = metadataPart.split('|').map((p) => p.trim()).filter(Boolean);
-          parts.forEach((p) => {
+          const parts = metadataPart.split(/[\s|,:]+/).map((p) => p.trim()).filter(Boolean);
+          const pipeParts = metadataPart.includes('|')
+            ? metadataPart.split('|').map((p) => p.trim()).filter(Boolean)
+            : parts;
+
+          pipeParts.forEach((p) => {
             const numMatch = p.match(/^(\d+)\s*(?:pts?|points?|marks?)/i);
             if (numMatch) {
               points = parseInt(numMatch[1], 10);
-            } else if (['Mathematics', 'English', 'Science', 'Social Studies', 'Art & Technology'].includes(p)) {
-              subject = p as Subject;
-            } else if (/^(?:Year|Grade|Form|Standard)\s*\d+/i.test(p)) {
+            } else if (KNOWN_SUBJECTS.some((s) => s.toLowerCase() === p.toLowerCase())) {
+              const matchedSubj = KNOWN_SUBJECTS.find((s) => s.toLowerCase() === p.toLowerCase());
+              if (matchedSubj) subject = matchedSubj as Subject;
+            } else if (/^(?:Year|Grade|Form|Standard)\s*\d+/i.test(p) || /^(?:Form|Year|Standard)\d+/i.test(p)) {
               gradeLevel = p;
             } else if (['easy', 'medium', 'hard'].includes(p.toLowerCase())) {
               difficulty = p.toLowerCase() as QuestionDifficulty;
-            } else if (p.length > 0) {
+            } else if (p.length > 0 && !p.startsWith('#')) {
               topic = p;
             }
           });
@@ -104,7 +128,7 @@ export function parseMarkdownQuestions(
 
       // Process subsequent lines
       for (let i = startIndex; i < lines.length; i++) {
-        const line = lines[i];
+        let line = lines[i];
 
         // Direct metadata tags
         if (/^type\s*:/i.test(line)) {
@@ -125,9 +149,7 @@ export function parseMarkdownQuestions(
 
         if (/^(?:subject)\s*:/i.test(line)) {
           const s = line.replace(/^subject\s*:/i, '').trim();
-          if (['Mathematics', 'English', 'Science', 'Social Studies', 'Art & Technology'].includes(s)) {
-            subject = s as Subject;
-          }
+          if (s) subject = s as Subject;
           continue;
         }
 
@@ -145,6 +167,19 @@ export function parseMarkdownQuestions(
           const p = parseInt(line.replace(/^(?:points?|marks?)\s*:/i, '').trim(), 10);
           if (!isNaN(p) && p > 0) points = p;
           continue;
+        }
+
+        // Image tag or markdown image syntax
+        if (/^(?:image|img|imageurl|photo|picture)\s*:\s*(.+)$/i.test(line)) {
+          imageUrl = line.replace(/^(?:image|img|imageurl|photo|picture)\s*:\s*/i, '').trim();
+          continue;
+        }
+
+        const inlineImgMatch = line.match(/!\[.*?\]\((https?:\/\/[^\s\)]+|\/api[^\s\)]+|data:image[^\s\)]+)\)/i);
+        if (inlineImgMatch) {
+          imageUrl = inlineImgMatch[1];
+          line = line.replace(/!\[.*?\]\((https?:\/\/[^\s\)]+|\/api[^\s\)]+|data:image[^\s\)]+)\)/i, '').trim();
+          if (!line) continue;
         }
 
         // Explanations & rubrics
@@ -169,12 +204,13 @@ export function parseMarkdownQuestions(
           continue;
         }
 
-        // MCQ checkboxes: - [x] or - [ ] or * [x]
-        const checkboxMatch = line.match(/^[-*]\s*\[([ xX])\]\s*(.*)$/);
+        // MCQ checkboxes: - [x] or - [ ] or * [x] or [x]
+        const checkboxMatch = line.match(/^[-*]?\s*\[([ xX])\]\s*(.*)$/);
         if (checkboxMatch) {
           type = 'mcq';
           const isCorrect = checkboxMatch[1].toLowerCase() === 'x';
           const optText = checkboxMatch[2].trim();
+
           if (isCorrect) {
             correctAnswerIndex = options.length;
           }
@@ -182,30 +218,40 @@ export function parseMarkdownQuestions(
           continue;
         }
 
-        // Letter options: A) Option or 1. Option
-        const letterOptionMatch = line.match(/^([A-Da-d])[\).]\s*(.*)$/);
+        // Letter or Number options: e.g. "A) Option", "A. Option", "1) Option", "- A) Option", "* A. Option"
+        const letterOptionMatch = line.match(/^(?:[-*]\s*)?([A-Ea-e1-5])[\).]\s*(.*)$/);
         if (letterOptionMatch) {
           type = 'mcq';
-          const optText = letterOptionMatch[2].trim();
+          let optText = letterOptionMatch[2].trim();
+
+          // Check if option text ends with (Correct) or * or [x]
+          const isCorrectMarker = /\s*(?:\(correct(?:\s*answer)?\)|\*|\[x\])$/i.test(optText);
+          if (isCorrectMarker) {
+            optText = optText.replace(/\s*(?:\(correct(?:\s*answer)?\)|\*|\[x\])$/i, '').trim();
+            correctAnswerIndex = options.length;
+          }
+
           options.push(optText);
           continue;
         }
 
-        // Correct Answer line for letter options: e.g. "Answer: B" or "Correct: C"
-        const explicitAnswerMatch = line.match(/^(?:Answer|Correct|Key)\s*:\s*([A-Da-d0-9])/i);
+        // Correct Answer line for options: e.g. "Answer: B" or "Correct: C" or "Ans: 2"
+        const explicitAnswerMatch = line.match(/^(?:Answer|Correct|Key|Ans)\s*:\s*([A-Ea-e1-5])/i);
         if (explicitAnswerMatch) {
           const char = explicitAnswerMatch[1].toUpperCase();
-          if (['A', 'B', 'C', 'D'].includes(char)) {
+          if (['A', 'B', 'C', 'D', 'E'].includes(char)) {
             correctAnswerIndex = char.charCodeAt(0) - 65;
           } else {
             const num = parseInt(char, 10);
-            if (!isNaN(num) && num > 0) correctAnswerIndex = num - 1;
+            if (!isNaN(num) && num > 0) {
+              correctAnswerIndex = num - 1;
+            }
           }
           continue;
         }
 
-        // Matching pair: - Term -> Definition or - Term : Definition
-        const matchPairMatch = line.match(/^[-*]\s*(.+?)\s*(?:->|=>|::|:)\s*(.+)$/);
+        // Matching pair: - Term -> Definition or - Term : Definition or Term => Definition
+        const matchPairMatch = line.match(/^(?:[-*]|\d+[\.\)])?\s*(.+?)\s*(?:->|=>|::)\s*(.+)$/);
         if (matchPairMatch && type === 'matching') {
           matchingPairs.push({
             id: `pair-${matchingPairs.length + 1}`,
@@ -223,11 +269,13 @@ export function parseMarkdownQuestions(
 
       // If Fill in blank has brackets e.g. "The capital of France is [Paris]."
       if (type === 'fill_in_blank') {
-        const bracketMatch = questionText.match(/\[(.*?)\]/);
-        if (bracketMatch && bracketMatch[1]) {
-          const bracketWord = bracketMatch[1].trim();
-          if (!acceptableAnswers.includes(bracketWord)) {
-            acceptableAnswers.unshift(bracketWord);
+        const bracketMatches = questionText.matchAll(/\[(.*?)\]/g);
+        for (const m of bracketMatches) {
+          if (m[1]) {
+            const word = m[1].trim();
+            if (word && !acceptableAnswers.includes(word)) {
+              acceptableAnswers.unshift(word);
+            }
           }
         }
       }
@@ -253,7 +301,6 @@ export function parseMarkdownQuestions(
         }
       } else if (type === 'fill_in_blank') {
         if (acceptableAnswers.length === 0) {
-          // Attempt to extract from question if [bracket] used
           const m = questionText.match(/\[(.*?)\]/);
           if (m && m[1]) {
             acceptableAnswers.push(m[1].trim());
@@ -271,6 +318,7 @@ export function parseMarkdownQuestions(
         subject,
         gradeLevel,
         topic: topic || 'General',
+        imageUrl: imageUrl || undefined,
         options: type === 'mcq' ? options : undefined,
         correctAnswerIndex: type === 'mcq' ? correctAnswerIndex : undefined,
         modelAnswer: type === 'structure' ? modelAnswer : undefined,
@@ -289,31 +337,31 @@ export function parseMarkdownQuestions(
 }
 
 export const SAMPLE_MARKDOWN_TEMPLATES = {
-  ALL_TYPES: `### MCQ | Mathematics | Year 5 | 2 pts | Fractions
-What is 3/4 + 2/4?
+  ALL_TYPES: `### MCQ | 数学 | Year 5 | 2 pts | 分数
+计算 3/4 + 2/4 的答案。
 - [ ] 5/8
 - [x] 5/4
 - [ ] 1/2
 - [ ] 6/4
-> Explanation: Add numerators when denominators are equal: 3 + 2 = 5, keeping denominator 4.
+> Explanation: 同分母分数相加，分母不变，分子相加：3 + 2 = 5，所以是 5/4。
 
-### Structure | Science | Year 6 | 5 pts | Photosynthesis
+### Structure | Science | Form 2 | 5 pts | Photosynthesis
 Describe the process of photosynthesis and explain why chlorophyll and sunlight are essential.
-> Model: Photosynthesis is the biochemical process by which plants use sunlight, water, and carbon dioxide to produce oxygen and glucose. Chlorophyll captures radiant solar energy to power this reaction.
-> Guidelines: Award 2 marks for reactants and products (CO2, H2O, Glucose, O2), 2 marks for chlorophyll solar absorption, 1 mark for structured clarity.
+Image: https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=600
+> Model: Photosynthesis is the biochemical process by which plants convert carbon dioxide and water into glucose and oxygen using light absorbed by chlorophyll.
+> Guidelines: 2 marks for stating reactants and products, 2 marks for solar absorption role of chlorophyll, 1 mark for clarity.
 
-### FillInBlank | English | Year 5 | 2 pts | Grammar
-The past tense of the verb "swim" is [swam].
-> Acceptable: swam, Swam
-> Explanation: "Swam" is the irregular past tense of "swim".
+### FillInBlank | Bahasa Melayu | Year 5 | 2 pts | Tatabahasa
+Kata kerja bagi perbuatan berenang dalam bentuk jamak ialah [berenang].
+> Acceptable: berenang, Berenang
+> Explanation: Kata kerja tidak berubah mengikut bilangan subjek.
 
-### Matching | Social Studies | Year 5 | 4 pts | Geography
-Match each country to its respective capital city:
-- Malaysia -> Kuala Lumpur
-- Japan -> Tokyo
-- Australia -> Canberra
-- France -> Paris
-> Explanation: National capital cities across Asia, Europe, and Oceania.`,
+### Matching | 华语 | Form 1 | 4 pts | 成语配对
+将下列成语与其正确的意思配对：
+- 画蛇添足 -> 多此一举，弄巧成拙
+- 守株待兔 -> 不知变通，企图侥幸
+- 狐假虎威 -> 倚仗别人的势力欺压他人
+- 亡羊补牢 -> 出了问题及时想办法补救`,
 
   MCQ_ONLY: `### MCQ | Mathematics | Year 5 | 1 pt | Arithmetic
 What is the product of 12 and 15?
@@ -323,22 +371,22 @@ What is the product of 12 and 15?
 - [ ] 160
 > Explanation: 12 * 15 = 180.
 
-### MCQ | Science | Year 5 | 1 pt | Solar System
-Which planet is known as the Red Planet?
-- [ ] Venus
-- [x] Mars
-- [ ] Jupiter
+### MCQ | 科学 | Year 5 | 1 pt | 太阳系
+太阳系中被称为“红行星”的是哪颗行星？
+- [ ] 金星 (Venus)
+- [x] 火星 (Mars)
+- [ ] 木星 (Jupiter)
 - [ ] Saturn
-> Explanation: Mars appears red due to abundant iron oxide on its surface.`,
+> Explanation: 火星表面覆盖大量氧化铁，呈现红褐色。`,
 
   STRUCTURE_ONLY: `### Structure | English | Year 6 | 5 pts | Essay Composition
 Write a short paragraph analyzing how the author conveys suspense in a mystery novel.
 > Model: The author builds suspense through pacing, sensory descriptions of shadows and footsteps, and cliffhangers at chapter ends.
 > Guidelines: 2 marks for citing specific narrative techniques, 2 marks for textual evidence, 1 mark for vocabulary and grammar.`,
 
-  FILL_IN_BLANK: `### FillInBlank | Science | Year 4 | 2 pts | Water Cycle
-The process where liquid water turns into water vapor is called [evaporation].
-> Acceptable: evaporation, Evaporation
+  FILL_IN_BLANK: `### FillInBlank | 科学 | Year 4 | 2 pts | 水的形态变化
+水受热变成水蒸气的过程称为 [蒸发]。
+> Acceptable: 蒸发, 沸腾
 
 ### FillInBlank | Mathematics | Year 5 | 2 pts | Geometry
 A triangle with three equal sides is called an [equilateral] triangle.
