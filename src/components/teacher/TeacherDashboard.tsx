@@ -41,6 +41,9 @@ import {
   Plus,
   SplitSquareVertical,
   Sliders,
+  Menu,
+  ChevronRight,
+  X,
 } from 'lucide-react';
 
 export const TeacherDashboard: React.FC = () => {
@@ -64,6 +67,7 @@ export const TeacherDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts'
   >('roster');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Find all classes assigned to this teacher
   const teacherClasses = classes.filter((c) => c.teacherId === currentUser?.id);
@@ -392,200 +396,195 @@ export const TeacherDashboard: React.FC = () => {
     }
   };
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Top Welcome Banner */}
-      <div className="bg-blue-900 rounded-2xl p-6 text-white shadow-md border border-blue-950 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
+  interface TeacherNavItem {
+    id: 'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts';
+    label: string;
+    icon: React.ElementType;
+    count?: number;
+    highlight?: boolean;
+  }
 
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="relative">
+  const teacherNavItems: TeacherNavItem[] = [
+    { id: 'roster', label: `Class Roster (${assignedStudentDetails.length})`, icon: Users },
+    { id: 'quizzes', label: `Quizzes & Creator (${teacherQuizzes.length})`, icon: Award },
+    { id: 'questions', label: `Question Bank (${questionBank.length})`, icon: Database },
+    { id: 'grading', label: 'Manual Grading & Reviews', icon: FileCheck, count: pendingReviewCount > 0 ? pendingReviewCount : undefined, highlight: pendingReviewCount > 0 },
+    { id: 'behavior', label: 'Parent Behavioral Notes', icon: MessageSquare },
+    { id: 'gradebook', label: 'Gradebook & Submissions', icon: Award },
+    { id: 'alerts', label: `Parent Alerts (${parentAlerts.length})`, icon: MessageCircle },
+  ];
+
+  return (
+    <div className="min-h-[calc(100vh-4rem)] flex flex-col lg:flex-row bg-slate-100/70">
+      {/* Mobile Sidebar Header & Toggle */}
+      <div className="lg:hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 sticky top-16 z-30">
+        <div className="flex items-center gap-2.5">
+          <UserAvatar name={currentUser?.fullName} role="teacher" size="sm" />
+          <div>
+            <div className="font-bold text-xs text-white">{currentUser?.fullName}</div>
+            <div className="text-[10px] text-slate-400">Class: {currentClass?.name || 'Faculty Portal'}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+          aria-label="Toggle navigation menu"
+        >
+          {isMobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+      </div>
+
+      {/* Sidebar Overlay for Mobile */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-30 lg:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* LMS Vertical Sidebar */}
+      <aside
+        className={`
+          fixed lg:sticky top-16 left-0 z-40 w-64 xl:w-72 bg-slate-900 text-slate-300 flex flex-col justify-between
+          h-[calc(100vh-4rem)] border-r border-slate-800/80 transition-transform duration-200 ease-in-out shrink-0
+          ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+      >
+        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+          {/* Teacher Profile Card */}
+          <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/60 space-y-3">
+            <div className="flex items-center gap-3">
+              <UserAvatar name={currentUser?.fullName} role="teacher" size="md" />
+              <div className="min-w-0 flex-1">
+                <div className="inline-flex items-center gap-1 text-[10px] font-mono uppercase text-blue-400 font-semibold tracking-wider">
+                  <BookOpen className="w-3 h-3 text-blue-400" />
+                  Faculty Portal
+                </div>
+                <h2 className="text-xs font-bold text-white truncate">{currentUser?.fullName}</h2>
+              </div>
+            </div>
+
+            {/* Class Selector dropdown inside Sidebar */}
+            {availableClasses.length > 0 && (
+              <div className="pt-2 border-t border-slate-700/60 space-y-1">
+                <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                  <Layers className="w-3 h-3 text-blue-400" />
+                  Active Classroom:
+                </label>
+                <select
+                  value={currentClass?.id}
+                  onChange={(e) => {
+                    setSelectedClassId(e.target.value);
+                    setQuizClassId(e.target.value);
+                  }}
+                  className="w-full text-xs bg-slate-900 border border-slate-700 text-slate-100 rounded-lg p-2 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-semibold"
+                >
+                  {availableClasses.map((cls) => {
+                    const count = studentDetails.filter((d) => d.classId === cls.id).length;
+                    return (
+                      <option key={cls.id} value={cls.id}>
+                        {cls.name} ({count} students)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Nav Items */}
+          <div className="space-y-1">
+            <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 py-1">
+              Classroom Management
+            </div>
+            {teacherNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  id={`teacher-tab-${item.id}`}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-all ${
+                    isActive
+                      ? 'bg-blue-600 text-white font-bold shadow-xs'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                  {item.count !== undefined && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                        item.highlight
+                          ? 'bg-amber-500 text-white animate-pulse'
+                          : isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700'
+                      }`}
+                    >
+                      {item.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Sidebar Footer Info */}
+        <div className="p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-400 space-y-1">
+          <div className="flex items-center gap-1.5 text-blue-300 font-semibold">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>5 Subject Modules Active</span>
+          </div>
+          <p className="text-[10px] text-slate-500">Mathematics, Science, English, Humanities, Arts</p>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* Top Header Card */}
+        <div className="bg-blue-900 rounded-2xl p-6 text-white shadow-md border border-blue-950 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
+
+          <div className="flex items-center gap-4 relative z-10">
             <UserAvatar
               name={currentUser?.fullName}
               role="teacher"
               size="xl"
               className="border-2 border-white/20 shadow-md"
             />
-          </div>
-
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-blue-100 text-xs font-mono uppercase tracking-wider mb-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-blue-300" />
-              Teacher Classroom Portal
-            </div>
-            <h1 className="text-2xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] tracking-tight">
-              Welcome, {currentUser?.fullName}
-            </h1>
-            <div className="text-xs text-blue-200 mt-1 flex flex-wrap items-center gap-2">
-              <span>
-                {teacherClasses.length > 1 ? (
-                  <>Carrying <strong className="text-white">{teacherClasses.length} Assigned Classes:</strong> {teacherClasses.map(c => c.name).join(', ')}</>
-                ) : (
-                  <>Homeroom Class: <strong className="text-white">{currentClass?.name || 'Assigned Class'}</strong> ({currentClass?.gradeLevel})</>
-                )}
-              </span>
-              <span>•</span>
-              <span><strong>{assignedStudentDetails.length}</strong> Students in active view ({currentClass?.name})</span>
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-blue-100 text-xs font-mono uppercase tracking-wider mb-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-blue-300" />
+                Teacher Portal
+              </div>
+              <h1 className="text-2xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] tracking-tight">
+                Welcome, {currentUser?.fullName}
+              </h1>
+              <div className="text-xs text-blue-200 mt-1 flex flex-wrap items-center gap-2">
+                <span>Active Class: <strong className="text-white">{currentClass?.name || 'Class'}</strong></span>
+                <span>•</span>
+                <span><strong>{assignedStudentDetails.length}</strong> Students</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-3 relative z-10 shrink-0">
-          <div className="hidden sm:flex items-center gap-2 bg-blue-950/80 px-4 py-2.5 rounded-lg border border-blue-800/80 text-xs text-blue-100">
-            <Sparkles className="w-4 h-4 text-blue-300" />
-            <span>Curriculum: Math, English, Science, Social Studies, Art</span>
+          <div className="flex items-center gap-3 relative z-10 shrink-0">
+            <div className="hidden sm:flex items-center gap-2 bg-blue-950/80 px-4 py-2.5 rounded-lg border border-blue-800/80 text-xs text-blue-100">
+              <Sparkles className="w-4 h-4 text-blue-300" />
+              <span>Curriculum Active</span>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Classroom Switcher Bar (When teacher carries 2 or more classes or chooses between classes) */}
-      {availableClasses.length > 1 && (
-        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-blue-700" />
-            <span className="text-xs font-bold text-slate-900">
-              Active Classroom View:
-            </span>
-            <span className="text-[11px] text-slate-500">
-              (Select classroom to inspect roster & gradebook)
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {availableClasses.map((cls) => {
-              const count = studentDetails.filter((d) => d.classId === cls.id).length;
-              const isSelected = cls.id === currentClass?.id;
-              return (
-                <button
-                  key={cls.id}
-                  onClick={() => {
-                    setSelectedClassId(cls.id);
-                    setQuizClassId(cls.id);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 ${
-                    isSelected
-                      ? 'bg-blue-900 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
-                  }`}
-                  id={`teacher-switch-class-${cls.id}`}
-                >
-                  <span>{cls.name}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                      isSelected
-                        ? 'bg-blue-800 text-blue-100'
-                        : 'bg-slate-200 text-slate-600'
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Nav Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('roster')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'roster'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="teacher-tab-roster"
-        >
-          <Users className="w-4 h-4" />
-          Class Roster ({currentClass?.name || 'Class'}) ({assignedStudentDetails.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('quizzes')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'quizzes'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="teacher-tab-quizzes"
-        >
-          <Award className="w-4 h-4" />
-          Subject Quizzes & Creator ({teacherQuizzes.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('questions')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'questions'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="teacher-tab-questions"
-        >
-          <Database className="w-4 h-4 text-blue-600" />
-          Question Bank ({questionBank.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('grading')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'grading'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : pendingReviewCount > 0
-              ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="teacher-tab-grading"
-        >
-          <FileCheck className="w-4 h-4" />
-          <span>Manual Grading & Reviews</span>
-          {pendingReviewCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-extrabold animate-pulse">
-              {pendingReviewCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('behavior')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'behavior'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="teacher-tab-behavior"
-        >
-          <MessageSquare className="w-4 h-4" />
-          Parent Behavioral Notes & Mentions
-        </button>
-
-        <button
-          onClick={() => setActiveTab('gradebook')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'gradebook'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="teacher-tab-gradebook"
-        >
-          <Award className="w-4 h-4" />
-          Class Submissions & Gradebook ({currentClass?.name || 'Class'})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('alerts')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'alerts'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="teacher-tab-alerts"
-        >
-          <MessageCircle className="w-4 h-4 text-emerald-500" />
-          <span>Parent Alerts ({parentAlerts.length})</span>
-        </button>
-      </div>
 
       {/* TAB 1: CLASS ROSTER & EDIT STUDENT DETAILS */}
       {activeTab === 'roster' && (
@@ -1798,6 +1797,7 @@ export const TeacherDashboard: React.FC = () => {
 
       {/* TAB 7: PARENT ALERTS & DISPATCHES */}
       {activeTab === 'alerts' && <ParentAlertsView teacherClassId={currentClass?.id} />}
+      </main>
 
       {/* MODAL: Pick from Question Bank */}
       <QuestionBankPickerModal

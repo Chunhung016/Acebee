@@ -19,6 +19,9 @@ import {
   Medal,
   Calendar,
   Brain,
+  Menu,
+  X,
+  ChevronRight,
 } from 'lucide-react';
 
 export const StudentDashboard: React.FC = () => {
@@ -32,6 +35,7 @@ export const StudentDashboard: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'quizzes' | 'diagnostics' | 'leaderboard' | 'grades' | 'teacher'>('quizzes');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [activeQuizForTaking, setActiveQuizForTaking] = useState<Quiz | null>(null);
 
   // Find student's detail and assigned class
@@ -88,103 +92,169 @@ export const StudentDashboard: React.FC = () => {
 
   const fiveSubjects = ['Mathematics', 'English', 'Science', 'Social Studies', 'Art & Technology'] as const;
 
+  interface StudentNavItem {
+    id: 'quizzes' | 'diagnostics' | 'leaderboard' | 'grades' | 'teacher';
+    label: string;
+    icon: React.ElementType;
+    count?: number;
+    highlight?: boolean;
+  }
+
+  const studentNavItems: StudentNavItem[] = [
+    { id: 'quizzes', label: 'Subject Quizzes', icon: BookOpen, count: pendingQuizzes.length > 0 ? pendingQuizzes.length : undefined, highlight: pendingQuizzes.length > 0 },
+    { id: 'diagnostics', label: 'Weak Area Diagnostics', icon: Brain },
+    { id: 'leaderboard', label: `Class Leaderboard (${leaderboardData.length})`, icon: Trophy },
+    { id: 'grades', label: 'Mastery & Grades', icon: TrendingUp },
+    { id: 'teacher', label: 'Homeroom Teacher', icon: User },
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Top Banner */}
-      <div className="bg-blue-900 rounded-2xl p-6 text-white shadow-md border border-blue-950 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
-
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-blue-100 text-xs font-mono uppercase tracking-wider mb-2">
-            <Award className="w-3.5 h-3.5 text-blue-300" />
-            Student Academic Workspace • {studentClass?.name}
-          </div>
-          <h1 className="text-2xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] tracking-tight">
-            Welcome back, {currentUser?.fullName}
-          </h1>
-          <p className="text-xs text-blue-200 mt-1 leading-relaxed">
-            Homeroom Teacher: <strong className="text-white">{teacherUser?.fullName || 'Mr. David Miller'}</strong> (instructs all 5 subject modules)
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 bg-blue-950/80 px-4 py-2.5 rounded-lg border border-blue-800/80 relative z-10 shrink-0">
-          <div className="text-right">
-            <span className="text-[10px] text-blue-200 uppercase font-mono tracking-wider font-semibold">Academic Average</span>
-            <div className="text-xl font-bold text-white font-['Plus_Jakarta_Sans',sans-serif]">{overallAverage}%</div>
-          </div>
-          <div className="w-9 h-9 rounded-lg bg-blue-800 text-blue-200 flex items-center justify-center font-bold">
-            <Trophy className="w-5 h-5 text-blue-300" />
+    <div className="min-h-[calc(100vh-4rem)] flex flex-col lg:flex-row bg-slate-100/70">
+      {/* Mobile Sidebar Header & Toggle */}
+      <div className="lg:hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 sticky top-16 z-30">
+        <div className="flex items-center gap-2.5">
+          <UserAvatar name={currentUser?.fullName} role="student" size="sm" />
+          <div>
+            <div className="font-bold text-xs text-white">{currentUser?.fullName}</div>
+            <div className="text-[10px] text-slate-400">{studentClass?.name || 'ACEBEE Student'}</div>
           </div>
         </div>
-      </div>
-
-      {/* Nav Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('quizzes')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'quizzes'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="student-tab-quizzes"
+          type="button"
+          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+          aria-label="Toggle navigation menu"
         >
-          <BookOpen className="w-4 h-4" />
-          Subject Quizzes ({pendingQuizzes.length} Pending)
-        </button>
-
-        <button
-          onClick={() => setActiveTab('diagnostics')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'diagnostics'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="student-tab-diagnostics"
-        >
-          <Brain className="w-4 h-4 text-purple-400" />
-          Weak Area Diagnostics
-        </button>
-
-        <button
-          onClick={() => setActiveTab('leaderboard')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'leaderboard'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="student-tab-leaderboard"
-        >
-          <Trophy className="w-4 h-4" />
-          Class Leaderboard ({leaderboardData.length} Scholars)
-        </button>
-
-        <button
-          onClick={() => setActiveTab('grades')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'grades'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="student-tab-grades"
-        >
-          <TrendingUp className="w-4 h-4" />
-          My Subject Mastery & Grades
-        </button>
-
-        <button
-          onClick={() => setActiveTab('teacher')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'teacher'
-              ? 'bg-blue-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          id="student-tab-teacher"
-        >
-          <User className="w-4 h-4" />
-          Assigned Homeroom Teacher
+          {isMobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </div>
+
+      {/* Sidebar Overlay for Mobile */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-30 lg:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* LMS Vertical Sidebar */}
+      <aside
+        className={`
+          fixed lg:sticky top-16 left-0 z-40 w-64 xl:w-72 bg-slate-900 text-slate-300 flex flex-col justify-between
+          h-[calc(100vh-4rem)] border-r border-slate-800/80 transition-transform duration-200 ease-in-out shrink-0
+          ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+      >
+        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+          {/* Student Profile Card */}
+          <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/60 space-y-3">
+            <div className="flex items-center gap-3">
+              <UserAvatar name={currentUser?.fullName} role="student" size="md" />
+              <div className="min-w-0 flex-1">
+                <div className="inline-flex items-center gap-1 text-[10px] font-mono uppercase text-blue-400 font-semibold tracking-wider">
+                  <Award className="w-3 h-3 text-blue-400" />
+                  Student Portal
+                </div>
+                <h2 className="text-xs font-bold text-white truncate">{currentUser?.fullName}</h2>
+                <div className="text-[11px] text-slate-400 truncate">{studentClass?.name}</div>
+              </div>
+            </div>
+
+            {/* Academic GPA badge */}
+            <div className="p-2.5 rounded-lg bg-blue-950/70 border border-blue-800/60 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase text-blue-200">Academic Average</span>
+              <div className="flex items-center gap-1 text-sm font-extrabold text-white">
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span>{overallAverage}%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Nav Items */}
+          <div className="space-y-1">
+            <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 py-1">
+              Student Modules
+            </div>
+            {studentNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  id={`student-tab-${item.id}`}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-all ${
+                    isActive
+                      ? 'bg-blue-600 text-white font-bold shadow-xs'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                  {item.count !== undefined && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                        item.highlight
+                          ? 'bg-amber-500 text-white animate-pulse'
+                          : isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700'
+                      }`}
+                    >
+                      {item.count} Pending
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Sidebar Footer Info */}
+        <div className="p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-400 space-y-1">
+          <div className="flex items-center gap-1.5 text-blue-300 font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>5 Core Subject Modules</span>
+          </div>
+          <p className="text-[10px] text-slate-500">Teacher: {teacherUser?.fullName || 'David Miller'}</p>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* Top Banner */}
+        <div className="bg-blue-900 rounded-2xl p-6 text-white shadow-md border border-blue-950 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -mr-20 -mt-20 pointer-events-none" />
+
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-blue-100 text-xs font-mono uppercase tracking-wider mb-2">
+              <Award className="w-3.5 h-3.5 text-blue-300" />
+              Student Academic Workspace • {studentClass?.name}
+            </div>
+            <h1 className="text-2xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] tracking-tight">
+              Welcome back, {currentUser?.fullName}
+            </h1>
+            <p className="text-xs text-blue-200 mt-1 leading-relaxed">
+              Homeroom Teacher: <strong className="text-white">{teacherUser?.fullName || 'Mr. David Miller'}</strong>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 bg-blue-950/80 px-4 py-2.5 rounded-lg border border-blue-800/80 relative z-10 shrink-0">
+            <div className="text-right">
+              <span className="text-[10px] text-blue-200 uppercase font-mono tracking-wider font-semibold">Academic Average</span>
+              <div className="text-xl font-bold text-white font-['Plus_Jakarta_Sans',sans-serif]">{overallAverage}%</div>
+            </div>
+            <div className="w-9 h-9 rounded-lg bg-blue-800 text-blue-200 flex items-center justify-center font-bold">
+              <Trophy className="w-5 h-5 text-blue-300" />
+            </div>
+          </div>
+        </div>
 
       {/* TAB 1: SUBJECT QUIZZES (PENDING & COMPLETED) */}
       {activeTab === 'quizzes' && (
@@ -467,6 +537,7 @@ export const StudentDashboard: React.FC = () => {
           </div>
         </div>
       )}
+      </main>
 
       {/* Active Quiz Taker Modal */}
       {activeQuizForTaking && (
