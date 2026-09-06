@@ -61,7 +61,7 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<'all' | 'critical' | 'developing' | 'mastered'>('all');
   const [expandedTopic, setExpandedTopic] = useState<string | null>(null);
   const [selectedPracticeTopic, setSelectedPracticeTopic] = useState<string | null>(null);
-  const [activePracticeSession, setActivePracticeSession] = useState<{ topic: string; subject: string } | null>(null);
+  const [activePracticeSession, setActivePracticeSession] = useState<{ topic: string; subject: string; timestamp?: number } | null>(null);
 
   // Student class resolution
   const myDetail = studentDetails.find((d) => d.studentId === currentUser?.id);
@@ -380,6 +380,7 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
               setActivePracticeSession({
                 topic: criticalPriorityTopic.topic,
                 subject: String(criticalPriorityTopic.subject),
+                timestamp: Date.now(),
               })
             }
             className="relative z-10 px-5 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-extrabold text-xs shadow-md transition-all flex items-center gap-2.5 shrink-0 cursor-pointer"
@@ -571,6 +572,7 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
                           setActivePracticeSession({
                             topic: diag.topic,
                             subject: String(diag.subject),
+                            timestamp: Date.now(),
                           })
                         }
                         className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
@@ -841,6 +843,7 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
       {/* POP OUT & OVERLAY 10-QUESTION PRACTICE DRILL */}
       {activePracticeSession && (
         <WeaknessPracticeOverlay
+          key={`${activePracticeSession.subject}-${activePracticeSession.topic}-${activePracticeSession.timestamp || ''}`}
           topic={activePracticeSession.topic}
           subject={activePracticeSession.subject}
           questionBank={questionBank}

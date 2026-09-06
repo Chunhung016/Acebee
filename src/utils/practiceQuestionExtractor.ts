@@ -553,180 +553,551 @@ const TOPIC_PRESETS: Record<string, InteractivePracticeQuestion[]> = {
 };
 
 /**
- * Extracts and curates exactly 10 questions for a topic.
- * Prioritizes matching questions from the school Question Bank and Quizzes,
- * then fills seamlessly with topic-aligned curriculum questions to ensure
- * a complete, rigorous 10-question drill every time.
+ * Shuffles an array in place using modern Fisher-Yates algorithm.
  */
-export function extractPracticeQuestions(
+export function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
+ * Randomizes options for an MCQ question and recalculates correctOptionIndex
+ * so the correct answer is evenly distributed across A, B, C, D.
+ */
+export function randomizeQuestionOptions(q: InteractivePracticeQuestion): InteractivePracticeQuestion {
+  if (q.type !== 'mcq' || !q.options || q.options.length < 2) {
+    return q;
+  }
+  const originalCorrectIndex = q.correctOptionIndex ?? 0;
+  const correctOptionText = q.options[originalCorrectIndex];
+  if (!correctOptionText) return q;
+
+  // Track the correct item by reference/index
+  const taggedOptions = q.options.map((opt, idx) => ({
+    opt,
+    isCorrect: idx === originalCorrectIndex,
+  }));
+
+  const shuffledTagged = shuffleArray(taggedOptions);
+  const newCorrectIndex = shuffledTagged.findIndex((item) => item.isCorrect);
+
+  return {
+    ...q,
+    options: shuffledTagged.map((item) => item.opt),
+    correctOptionIndex: newCorrectIndex >= 0 ? newCorrectIndex : 0,
+  };
+}
+
+/**
+ * Procedurally generates a unique, randomized question when needed to round out 10 questions.
+ */
+function generateProceduralRandomQuestion(
+  index: number,
   topicName: string,
-  subjectName: string,
-  questionBank: QuestionBankItem[],
-  quizzes: Quiz[]
-): InteractivePracticeQuestion[] {
-  const normalizedTopic = topicName.toLowerCase();
-  const collectedQuestions: InteractivePracticeQuestion[] = [];
+  subjectName: string
+): InteractivePracticeQuestion {
+  const normSubject = subjectName.toLowerCase();
+  const isMath = normSubject.includes('math') || topicName.toLowerCase().includes('fraction') || topicName.toLowerCase().includes('algebra') || topicName.toLowerCase().includes('number');
+  const isScience = normSubject.includes('scien') || topicName.toLowerCase().includes('bio') || topicName.toLowerCase().includes('photo') || topicName.toLowerCase().includes('force');
+  const isEnglish = normSubject.includes('eng') || topicName.toLowerCase().includes('grammar') || topicName.toLowerCase().includes('verb') || topicName.toLowerCase().includes('vocab');
 
-  // 1. Gather exact or partial topic matches from Question Bank
-  questionBank.forEach((q) => {
-    if (
-      q.topic.toLowerCase().includes(normalizedTopic) ||
-      normalizedTopic.includes(q.topic.toLowerCase()) ||
-      (q.subject && q.subject.toLowerCase() === subjectName.toLowerCase())
-    ) {
-      if (q.type === 'mcq' && q.options && q.options.length >= 2) {
-        collectedQuestions.push({
-          id: `qb-${q.id}`,
-          type: q.type,
-          question: q.question,
-          topic: q.topic || topicName,
-          subject: q.subject || subjectName,
-          difficulty: q.difficulty || 'medium',
-          points: q.points || 1,
-          options: q.options,
-          correctOptionIndex: q.correctAnswerIndex ?? 0,
-          explanation: q.explanation || 'Review fundamental definitions and step-by-step logic.',
-          learningTip: `Reinforce concepts from ${q.topic}`,
-        });
-      }
-    }
-  });
+  const randomId = `dynamic-drill-${Date.now()}-${Math.floor(Math.random() * 10000)}-${index}`;
 
-  // 2. Gather matching questions from quizzes
-  quizzes.forEach((quiz) => {
-    if (quiz.subject.toLowerCase() === subjectName.toLowerCase() || quiz.title.toLowerCase().includes(normalizedTopic)) {
-      quiz.questions.forEach((q) => {
-        if (q.type === 'mcq' && q.options && q.options.length >= 2) {
-          // Avoid duplicate question text
-          if (!collectedQuestions.some((item) => item.question.trim() === q.question.trim())) {
-            collectedQuestions.push({
-              id: `quiz-q-${q.id}`,
-              type: q.type,
-              question: q.question,
-              topic: q.topic || quiz.title || topicName,
-              subject: quiz.subject || subjectName,
-              difficulty: q.difficulty || 'medium',
-              points: q.points || 1,
-              options: q.options,
-              correctOptionIndex: q.correctAnswerIndex ?? 0,
-              explanation: q.explanation || 'Verified curriculum item from class assessment.',
-              learningTip: `From ${quiz.title}`,
-            });
-          }
-        }
+  if (isMath) {
+    const variant = Math.floor(Math.random() * 5);
+    if (variant === 0) {
+      // Linear equation: ax + b = c
+      const a = Math.floor(Math.random() * 5) + 2;
+      const x = Math.floor(Math.random() * 9) + 2;
+      const b = Math.floor(Math.random() * 15) + 1;
+      const c = a * x + b;
+      return randomizeQuestionOptions({
+        id: randomId,
+        type: 'mcq',
+        question: `Solve for x: ${a}x + ${b} = ${c}`,
+        topic: topicName,
+        subject: subjectName,
+        difficulty: 'medium',
+        points: 1,
+        options: [`${x}`, `${x + 1}`, `${Math.max(1, x - 1)}`, `${x + 2}`],
+        correctOptionIndex: 0,
+        explanation: `Subtract ${b} from both sides: ${a}x = ${c - b}. Divide by ${a}: x = ${x}.`,
+        learningTip: 'Isolate the variable term first, then divide by the coefficient.',
       });
-    }
-  });
-
-  // 3. Find built-in curated preset matching theme
-  let presetList: InteractivePracticeQuestion[] = [];
-  if (normalizedTopic.includes('fraction') || normalizedTopic.includes('ratio') || normalizedTopic.includes('operation')) {
-    presetList = TOPIC_PRESETS.fractions;
-  } else if (normalizedTopic.includes('photo') || normalizedTopic.includes('plant') || normalizedTopic.includes('bio') || normalizedTopic.includes('cell')) {
-    presetList = TOPIC_PRESETS.photosynthesis;
-  } else if (normalizedTopic.includes('verb') || normalizedTopic.includes('grammar') || normalizedTopic.includes('tense') || normalizedTopic.includes('english')) {
-    presetList = TOPIC_PRESETS.grammar;
-  } else if (normalizedTopic.includes('capital') || normalizedTopic.includes('geography') || normalizedTopic.includes('continent') || normalizedTopic.includes('world') || normalizedTopic.includes('social')) {
-    presetList = TOPIC_PRESETS.geography;
-  }
-
-  // Combine collected items with preset items
-  const combined: InteractivePracticeQuestion[] = [];
-
-  // Add matching collected questions
-  for (const q of collectedQuestions) {
-    if (!combined.some((item) => item.question.trim().toLowerCase() === q.question.trim().toLowerCase())) {
-      combined.push(q);
-      if (combined.length === 10) break;
-    }
-  }
-
-  // If still under 10, fill from preset
-  if (combined.length < 10 && presetList.length > 0) {
-    for (const q of presetList) {
-      if (!combined.some((item) => item.question.trim().toLowerCase() === q.question.trim().toLowerCase())) {
-        combined.push({
-          ...q,
-          topic: topicName,
-          subject: subjectName,
-        });
-        if (combined.length === 10) break;
-      }
-    }
-  }
-
-  // If still under 10 (or no preset matched), generate structured topical drill questions to reach exactly 10
-  let counter = combined.length + 1;
-  while (combined.length < 10) {
-    const isMath = subjectName.toLowerCase().includes('math') || normalizedTopic.includes('math');
-    const isScience = subjectName.toLowerCase().includes('scien') || normalizedTopic.includes('scien');
-    
-    let generated: InteractivePracticeQuestion;
-    if (isMath) {
-      const numA = 2 + counter * 3;
-      const numB = 12 + counter * 2;
-      generated = {
-        id: `gen-math-${counter}-${Date.now()}`,
+    } else if (variant === 1) {
+      // Arithmetic order of operations
+      const n1 = (Math.floor(Math.random() * 6) + 2) * 2;
+      const n2 = Math.floor(Math.random() * 8) + 3;
+      const n3 = Math.floor(Math.random() * 12) + 5;
+      const answer = n1 * 2 + n2 - n3;
+      return randomizeQuestionOptions({
+        id: randomId,
         type: 'mcq',
-        question: `Practice Exercise ${counter}: Simplify and evaluate the expression (${numA} × 4) ÷ 2 within ${topicName}.`,
+        question: `Evaluate the expression: (${n1} × 2) + ${n2} - ${n3}`,
         topic: topicName,
         subject: subjectName,
-        difficulty: counter % 2 === 0 ? 'medium' : 'hard',
+        difficulty: 'easy',
         points: 1,
-        options: [
-          `${numA * 2}`,
-          `${numA * 4}`,
-          `${numA + 8}`,
-          `${Math.floor(numA / 2)}`,
-        ],
+        options: [`${answer}`, `${answer + 4}`, `${answer - 3}`, `${answer + 10}`],
         correctOptionIndex: 0,
-        explanation: `Using order of operations: (${numA} × 4) = ${numA * 4}, then dividing by 2 gives ${numA * 2}.`,
-        learningTip: `Mastering foundational operations in ${topicName} ensures rapid problem-solving.`,
-      };
-    } else if (isScience) {
-      generated = {
-        id: `gen-sci-${counter}-${Date.now()}`,
+        explanation: `Step 1: (${n1} × 2) = ${n1 * 2}. Step 2: ${n1 * 2} + ${n2} = ${n1 * 2 + n2}. Step 3: Subtract ${n3} gives ${answer}.`,
+        learningTip: 'Follow PEMDAS / BODMAS: Parentheses first, then multiplication, then addition/subtraction.',
+      });
+    } else if (variant === 2) {
+      // Fractions multiplication
+      const num1 = Math.floor(Math.random() * 3) + 1;
+      const den1 = num1 + Math.floor(Math.random() * 3) + 2;
+      const num2 = Math.floor(Math.random() * 3) + 2;
+      const den2 = num2 + Math.floor(Math.random() * 4) + 1;
+      const rawNum = num1 * num2;
+      const rawDen = den1 * den2;
+      return randomizeQuestionOptions({
+        id: randomId,
         type: 'mcq',
-        question: `Practice Concept ${counter}: In the study of ${topicName}, what is the primary hypothesis test used by researchers?`,
-        topic: topicName,
-        subject: subjectName,
-        difficulty: counter % 2 === 0 ? 'medium' : 'easy',
-        points: 1,
-        options: [
-          'Controlled experimentation with independent and dependent variables',
-          'Speculative observation without recording data',
-          'Measuring only subjective impressions',
-          'Disregarding anomalous measurements',
-        ],
-        correctOptionIndex: 0,
-        explanation: 'Scientific rigor requires isolating independent variables and measuring dependent changes against a control group.',
-        learningTip: 'Always identify controls and variables in scientific investigations.',
-      };
-    } else {
-      generated = {
-        id: `gen-gen-${counter}-${Date.now()}`,
-        type: 'mcq',
-        question: `Review Challenge ${counter}: Which strategy is most effective when reinforcing understanding in ${topicName}?`,
+        question: `Multiply the fractions: (${num1}/${den1}) × (${num2}/${den2})`,
         topic: topicName,
         subject: subjectName,
         difficulty: 'medium',
         points: 1,
         options: [
-          'Active recall and practicing similar problem types repeatedly',
-          'Skimming text once without testing yourself',
-          'Memorizing answers without understanding underlying concepts',
-          'Avoiding difficult questions',
+          `${rawNum}/${rawDen}`,
+          `${num1 + num2}/${den1 + den2}`,
+          `${rawNum + 2}/${rawDen}`,
+          `${num1 * den2}/${num2 * den1}`,
         ],
         correctOptionIndex: 0,
-        explanation: 'Cognitive science demonstrates that active retrieval and targeted drills build strong neural pathways for long-term mastery.',
-        learningTip: `Consistently practice targeted questions to eliminate weak gaps in ${topicName}.`,
+        explanation: `Multiply the numerators (${num1} × ${num2} = ${rawNum}) and multiply denominators (${den1} × ${den2} = ${rawDen}).`,
+        learningTip: 'To multiply fractions, multiply straight across top and bottom.',
+      });
+    } else if (variant === 3) {
+      // Percentage calculation
+      const p = (Math.floor(Math.random() * 4) + 1) * 10; // 10%, 20%, 30%, 40%
+      const base = (Math.floor(Math.random() * 8) + 2) * 50; // 100, 150, 200...
+      const ans = (p / 100) * base;
+      return randomizeQuestionOptions({
+        id: randomId,
+        type: 'mcq',
+        question: `Calculate ${p}% of ${base}.`,
+        topic: topicName,
+        subject: subjectName,
+        difficulty: 'easy',
+        points: 1,
+        options: [`${ans}`, `${ans + 15}`, `${ans - 10}`, `${Math.round(ans * 1.5)}`],
+        correctOptionIndex: 0,
+        explanation: `${p}% = ${p / 100}. Multiplying ${p / 100} × ${base} = ${ans}.`,
+        learningTip: 'Divide the percentage by 100, then multiply by the total number.',
+      });
+    } else {
+      // Geometry: Rectangle area
+      const length = Math.floor(Math.random() * 9) + 4;
+      const width = Math.floor(Math.random() * 5) + 3;
+      const area = length * width;
+      return randomizeQuestionOptions({
+        id: randomId,
+        type: 'mcq',
+        question: `A rectangular field has length ${length} m and width ${width} m. What is its total area?`,
+        topic: topicName,
+        subject: subjectName,
+        difficulty: 'easy',
+        points: 1,
+        options: [`${area} m²`, `${2 * (length + width)} m²`, `${area + length} m²`, `${length * 2 + width} m²`],
+        correctOptionIndex: 0,
+        explanation: `Area = length × width = ${length} × ${width} = ${area} square meters.`,
+        learningTip: 'Perimeter is the boundary (2L + 2W); Area is the internal surface (L × W).',
+      });
+    }
+  }
+
+  if (isScience) {
+    const sciencePool = [
+      {
+        question: `Which fundamental law of physics states that for every action force, there is an equal and opposite reaction force?`,
+        options: [`Newton's Third Law of Motion`, `Newton's First Law of Inertia`, `Law of Universal Gravitation`, `Ohm's Law`],
+        explanation: `Newton's Third Law states that every action produces a simultaneous force of equal magnitude and opposite direction.`,
+        tip: 'Think of pushing off a boat: the boat moves backward while you move forward.',
+      },
+      {
+        question: `In animal and plant cell biology, which organelle is commonly referred to as the "powerhouse of the cell"?`,
+        options: [`Mitochondria`, `Endoplasmic Reticulum`, `Ribosome`, `Golgi Apparatus`],
+        explanation: `Mitochondria synthesize the vast majority of chemical ATP energy through cellular respiration.`,
+        tip: 'ATP = Adenosine Triphosphate, the cellular energy currency.',
+      },
+      {
+        question: `What phase change occurs when a substance transitions directly from a solid state to a gas without turning into liquid?`,
+        options: [`Sublimation`, `Evaporation`, `Condensation`, `Deposition`],
+        explanation: `Sublimation is the direct transition from solid to gaseous state, as seen in dry ice (solid CO2).`,
+        tip: 'Dry ice sublimates into gaseous vapor at room temperature.',
+      },
+      {
+        question: `What type of chemical bonding involves the transfer of valence electrons from a metal atom to a non-metal atom?`,
+        options: [`Ionic bonding`, `Covalent bonding`, `Metallic bonding`, `Hydrogen bonding`],
+        explanation: `Ionic bonds form through electrostatic attraction between oppositely charged ions created by electron transfer.`,
+        tip: 'Table salt (NaCl) is a classic example of an ionic lattice.',
+      },
+      {
+        question: `Which ecosystem organism category breaks down dead organic matter and returns nutrients to the soil?`,
+        options: [`Decomposers (fungi and bacteria)`, `Apex predators`, `Primary producers`, `Herbivores`],
+        explanation: `Decomposers recycle vital nitrogen, phosphorus, and carbon by breaking down decaying organic tissues.`,
+        tip: 'Without decomposers, organic matter would accumulate indefinitely.',
+      },
+    ];
+    const picked = sciencePool[Math.floor(Math.random() * sciencePool.length)];
+    return randomizeQuestionOptions({
+      id: randomId,
+      type: 'mcq',
+      question: picked.question,
+      topic: topicName,
+      subject: subjectName,
+      difficulty: 'medium',
+      points: 1,
+      options: picked.options,
+      correctOptionIndex: 0,
+      explanation: picked.explanation,
+      learningTip: picked.tip,
+    });
+  }
+
+  if (isEnglish) {
+    const englishPool = [
+      {
+        question: `Identify the sentence that uses a semicolon correctly to connect two related independent clauses:`,
+        options: [
+          `The library was silent; everyone was focused on their exams.`,
+          `The library was silent; and everyone was studying.`,
+          `Because the library was silent; everyone left early.`,
+          `The library was silent; although it was open.`,
+        ],
+        explanation: `A semicolon joins two independent clauses without needing a coordinating conjunction (like 'and' or 'but').`,
+        tip: 'Both halves on either side of the semicolon must be complete sentences on their own.',
+      },
+      {
+        question: `Choose the sentence with correct apostrophe usage for possession:`,
+        options: [
+          `The students' science projects were displayed in the main hall.`,
+          `The student's were excited to present their projects.`,
+          `The students projects' were praised by the principal.`,
+          `The student's projects was very impressive.`,
+        ],
+        explanation: `For a plural noun ending in -s (students), place the apostrophe after the s to indicate plural possession.`,
+        tip: 'Singular: student\'s book. Plural: students\' books.',
+      },
+      {
+        question: `Which of the following sentences is written in the active voice?`,
+        options: [
+          `The engineer designed an innovative solar collector.`,
+          `An innovative solar collector was designed by the engineer.`,
+          `The solar collector has been tested by the team.`,
+          `Safety protocols were reviewed by the laboratory manager.`,
+        ],
+        explanation: `In active voice, the subject (the engineer) performs the action (designed) directly on the object.`,
+        tip: 'Active voice is usually more concise and energetic than passive voice.',
+      },
+      {
+        question: `Select the word that correctly functions as an adverb modifying a verb:`,
+        options: [
+          `The soprano sang beautifully during the final recital.`,
+          `The soprano sang beautiful during the final recital.`,
+          `The soprano sang beauty during the final recital.`,
+          `The soprano sang beauteous during the final recital.`,
+        ],
+        explanation: `"Beautifully" is the adverb describing the manner in which she sang (the verb).`,
+        tip: 'Adverbs often end in -ly and answer "how", "when", or "where".',
+      },
+    ];
+    const picked = englishPool[Math.floor(Math.random() * englishPool.length)];
+    return randomizeQuestionOptions({
+      id: randomId,
+      type: 'mcq',
+      question: picked.question,
+      topic: topicName,
+      subject: subjectName,
+      difficulty: 'medium',
+      points: 1,
+      options: picked.options,
+      correctOptionIndex: 0,
+      explanation: picked.explanation,
+      learningTip: picked.tip,
+    });
+  }
+
+  // Social Studies & General
+  const generalPool = [
+    {
+      question: `What is the primary function of the legislative branch in a democratic constitutional system?`,
+      options: [
+        `To draft, debate, and enact statutory laws`,
+        `To enforce executive decrees and command defense forces`,
+        `To interpret judicial rulings and preside over appeals`,
+        `To conduct international trade treaties without oversight`,
+      ],
+      explanation: `The legislative branch (Parliament / Congress) holds the constitutional power to debate and pass laws.`,
+      tip: 'Legislative = Makes laws; Executive = Enforces laws; Judicial = Interprets laws.',
+    },
+    {
+      question: `Which imaginary line of latitude demarcates zero degrees latitude, dividing Earth into Northern and Southern Hemispheres?`,
+      options: [`The Equator`, `The Prime Meridian`, `Tropic of Cancer`, `Tropic of Capricorn`],
+      explanation: `The Equator is the 0° parallel of latitude encircling the center of the globe.`,
+      tip: 'The Prime Meridian is 0° longitude (vertical), whereas the Equator is 0° latitude (horizontal).',
+    },
+    {
+      question: `Which economic principle states that when the supply of a product decreases while consumer demand remains constant, the price tends to rise?`,
+      options: [`The Law of Supply and Demand`, `The Law of Diminishing Returns`, `Inflation Indexing`, `Comparative Advantage`],
+      explanation: `Scarcity in supply relative to sustained demand drives competitive market pricing upward.`,
+      tip: 'High demand + low supply = higher prices.',
+    },
+  ];
+  const picked = generalPool[Math.floor(Math.random() * generalPool.length)];
+  return randomizeQuestionOptions({
+    id: randomId,
+    type: 'mcq',
+    question: picked.question,
+    topic: topicName,
+    subject: subjectName,
+    difficulty: 'medium',
+    points: 1,
+    options: picked.options,
+    correctOptionIndex: 0,
+    explanation: picked.explanation,
+    learningTip: picked.tip,
+  });
+}
+
+/**
+ * Extracts and curates exactly 10 questions for a student practice/drilling session.
+ * Always dynamically randomizes from the school database (Question Bank & Quizzes)
+ * and guarantees a unique, randomized question set with shuffled answer choices every time.
+ */
+export function extractPracticeQuestions(
+  topicName: string,
+  subjectName: string,
+  questionBank: QuestionBankItem[],
+  quizzes: Quiz[],
+  options?: {
+    excludeIds?: string[];
+    seed?: number | string;
+  }
+): InteractivePracticeQuestion[] {
+  const normalizedTopic = topicName.toLowerCase();
+  const topicTokens = normalizedTopic
+    .split(/[\s,&/\\-]+/)
+    .map((w) => w.trim().toLowerCase())
+    .filter((w) => w.length >= 3 && !['the', 'and', 'for', 'with', 'from', 'area', 'unit', 'part', 'core'].includes(w));
+
+  const excludeSet = new Set(options?.excludeIds || []);
+
+  const tier1TopicMatches: InteractivePracticeQuestion[] = [];
+  const tier2SubjectMatches: InteractivePracticeQuestion[] = [];
+  const tier3OtherMatches: InteractivePracticeQuestion[] = [];
+
+  const seenQuestionTexts = new Set<string>();
+
+  const isTopicMatch = (text: string, tags?: string[]): boolean => {
+    const lower = text.toLowerCase();
+    if (lower.includes(normalizedTopic) || normalizedTopic.includes(lower)) return true;
+    if (topicTokens.some((token) => lower.includes(token))) return true;
+    if (tags && tags.some((t) => topicTokens.some((token) => t.toLowerCase().includes(token)))) return true;
+    return false;
+  };
+
+  // 1. Gather all candidates from Question Bank
+  questionBank.forEach((q) => {
+    const qSubject = (q.subject || '').toLowerCase();
+    const targetSubject = subjectName.toLowerCase();
+    const isSameSubject = qSubject === targetSubject || qSubject.includes(targetSubject) || targetSubject.includes(qSubject);
+    const matchesTopic = isTopicMatch(q.topic + ' ' + q.question, q.tags);
+
+    let practiceItem: InteractivePracticeQuestion | null = null;
+
+    if (q.type === 'mcq' && q.options && q.options.length >= 2) {
+      practiceItem = {
+        id: `qb-${q.id}`,
+        type: 'mcq',
+        question: q.question,
+        topic: q.topic || topicName,
+        subject: q.subject || subjectName,
+        difficulty: q.difficulty || 'medium',
+        points: q.points || 1,
+        options: q.options,
+        correctOptionIndex: q.correctAnswerIndex ?? 0,
+        explanation: q.explanation || 'Step-by-step verification from the school Question Bank.',
+        learningTip: `From Question Bank: ${q.topic}`,
+      };
+    } else if ((q.type === 'structure' || q.type === 'fill_in_blank') && (q.acceptableAnswers?.length || q.modelAnswer)) {
+      practiceItem = {
+        id: `qb-${q.id}`,
+        type: 'structure',
+        question: q.question,
+        topic: q.topic || topicName,
+        subject: q.subject || subjectName,
+        difficulty: q.difficulty || 'medium',
+        points: q.points || 1,
+        correctAnswerText: q.modelAnswer || q.acceptableAnswers?.[0],
+        acceptableAnswers: q.acceptableAnswers,
+        explanation: q.explanation || q.guidelines || 'Verify keyword matches against model rubric.',
+        learningTip: `From Question Bank: ${q.topic}`,
+      };
+    } else if (q.type === 'matching' && q.matchingPairs && q.matchingPairs.length >= 2) {
+      practiceItem = {
+        id: `qb-${q.id}`,
+        type: 'matching',
+        question: q.question,
+        topic: q.topic || topicName,
+        subject: q.subject || subjectName,
+        difficulty: q.difficulty || 'medium',
+        points: q.points || 1,
+        matchingPairs: q.matchingPairs,
+        explanation: q.explanation || 'Connect corresponding concept pairs accurately.',
+        learningTip: `From Question Bank: ${q.topic}`,
       };
     }
 
-    combined.push(generated);
-    counter++;
+    if (practiceItem) {
+      if (matchesTopic) {
+        tier1TopicMatches.push(practiceItem);
+      } else if (isSameSubject) {
+        tier2SubjectMatches.push(practiceItem);
+      } else {
+        tier3OtherMatches.push(practiceItem);
+      }
+    }
+  });
+
+  // 2. Gather all candidates from Quizzes in database
+  quizzes.forEach((quiz) => {
+    const quizSubj = (quiz.subject || '').toLowerCase();
+    const targetSubj = subjectName.toLowerCase();
+    const isSameSubject = quizSubj === targetSubj || quizSubj.includes(targetSubj) || targetSubj.includes(quizSubj);
+    const quizMatchesTopic = isTopicMatch(quiz.title + ' ' + (quiz.description || ''));
+
+    quiz.questions.forEach((q) => {
+      const qMatchesTopic = quizMatchesTopic || isTopicMatch(q.topic || '' + ' ' + q.question);
+
+      let practiceItem: InteractivePracticeQuestion | null = null;
+
+      if (q.type === 'mcq' && q.options && q.options.length >= 2) {
+        practiceItem = {
+          id: `quiz-q-${q.id}`,
+          type: 'mcq',
+          question: q.question,
+          topic: q.topic || quiz.title || topicName,
+          subject: quiz.subject || subjectName,
+          difficulty: q.difficulty || 'medium',
+          points: q.points || 1,
+          options: q.options,
+          correctOptionIndex: q.correctAnswerIndex ?? 0,
+          explanation: q.explanation || 'Verified assessment item from classroom curriculum.',
+          learningTip: `From Assessment: ${quiz.title}`,
+        };
+      } else if ((q.type === 'structure' || q.type === 'fill_in_blank') && (q.acceptableAnswers?.length || q.modelAnswer)) {
+        practiceItem = {
+          id: `quiz-q-${q.id}`,
+          type: 'structure',
+          question: q.question,
+          topic: q.topic || quiz.title || topicName,
+          subject: quiz.subject || subjectName,
+          difficulty: q.difficulty || 'medium',
+          points: q.points || 1,
+          correctAnswerText: q.modelAnswer || q.acceptableAnswers?.[0],
+          acceptableAnswers: q.acceptableAnswers,
+          explanation: q.explanation || q.guidelines || 'Consult step-by-step marking rubric.',
+          learningTip: `From Assessment: ${quiz.title}`,
+        };
+      } else if (q.type === 'matching' && q.matchingPairs && q.matchingPairs.length >= 2) {
+        practiceItem = {
+          id: `quiz-q-${q.id}`,
+          type: 'matching',
+          question: q.question,
+          topic: q.topic || quiz.title || topicName,
+          subject: quiz.subject || subjectName,
+          difficulty: q.difficulty || 'medium',
+          points: q.points || 1,
+          matchingPairs: q.matchingPairs,
+          explanation: q.explanation || 'Match terms on the left to definitions on the right.',
+          learningTip: `From Assessment: ${quiz.title}`,
+        };
+      }
+
+      if (practiceItem) {
+        if (qMatchesTopic) {
+          tier1TopicMatches.push(practiceItem);
+        } else if (isSameSubject) {
+          tier2SubjectMatches.push(practiceItem);
+        } else {
+          tier3OtherMatches.push(practiceItem);
+        }
+      }
+    });
+  });
+
+  // 3. Find curated topic preset items
+  let presetList: InteractivePracticeQuestion[] = [];
+  if (normalizedTopic.includes('fraction') || normalizedTopic.includes('ratio') || normalizedTopic.includes('operation') || normalizedTopic.includes('arithmetic')) {
+    presetList = TOPIC_PRESETS.fractions || [];
+  } else if (normalizedTopic.includes('photo') || normalizedTopic.includes('plant') || normalizedTopic.includes('bio') || normalizedTopic.includes('cell') || normalizedTopic.includes('chloroplast')) {
+    presetList = TOPIC_PRESETS.photosynthesis || [];
+  } else if (normalizedTopic.includes('verb') || normalizedTopic.includes('grammar') || normalizedTopic.includes('tense') || normalizedTopic.includes('english') || normalizedTopic.includes('clause')) {
+    presetList = TOPIC_PRESETS.grammar || [];
+  } else if (normalizedTopic.includes('capital') || normalizedTopic.includes('geography') || normalizedTopic.includes('continent') || normalizedTopic.includes('world') || normalizedTopic.includes('social') || normalizedTopic.includes('ocean')) {
+    presetList = TOPIC_PRESETS.geography || [];
   }
 
-  // Exactly 10 questions returned
-  return combined.slice(0, 10);
+  // 4. RANDOMIZE & SHUFFLE CANDIDATES
+  // First, prioritize items not recently excluded, but allow them if total candidates are limited
+  const filterExcluded = (list: InteractivePracticeQuestion[]) => {
+    const unread = list.filter((item) => !excludeSet.has(item.id));
+    return unread.length >= 5 ? unread : list;
+  };
+
+  const shuffledTier1 = shuffleArray(filterExcluded(tier1TopicMatches));
+  const shuffledTier2 = shuffleArray(filterExcluded(tier2SubjectMatches));
+  const shuffledPresets = shuffleArray(filterExcluded(presetList));
+  const shuffledTier3 = shuffleArray(filterExcluded(tier3OtherMatches));
+
+  const result: InteractivePracticeQuestion[] = [];
+
+  const addCandidates = (pool: InteractivePracticeQuestion[]) => {
+    for (const q of pool) {
+      if (result.length >= 10) break;
+      const key = q.question.trim().toLowerCase();
+      if (!seenQuestionTexts.has(key)) {
+        seenQuestionTexts.add(key);
+        // Randomize the choices order for MCQ questions so the correct answer is not in a fixed position
+        result.push(randomizeQuestionOptions(q));
+      }
+    }
+  };
+
+  // Step 1: Add shuffled tier 1 topic questions from Question Bank & Quizzes
+  addCandidates(shuffledTier1);
+
+  // Step 2: Add shuffled curated topic preset questions
+  addCandidates(shuffledPresets);
+
+  // Step 3: Add shuffled subject questions from database
+  addCandidates(shuffledTier2);
+
+  // Step 4: Add other database questions if needed
+  if (result.length < 10) {
+    addCandidates(shuffledTier3);
+  }
+
+  // Step 5: If still under 10, generate procedurally randomized questions
+  let proceduralIndex = 1;
+  while (result.length < 10) {
+    const generated = generateProceduralRandomQuestion(proceduralIndex, topicName, subjectName);
+    const key = generated.question.trim().toLowerCase();
+    if (!seenQuestionTexts.has(key)) {
+      seenQuestionTexts.add(key);
+      result.push(generated);
+    }
+    proceduralIndex++;
+    if (proceduralIndex > 25) break; // safety guard
+  }
+
+  // Final shuffle of the 10 selected questions so question types/topics are interleaved
+  return shuffleArray(result.slice(0, 10));
 }

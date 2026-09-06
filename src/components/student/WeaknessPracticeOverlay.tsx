@@ -18,6 +18,8 @@ import {
   AlertTriangle,
   Send,
   Zap,
+  Dices,
+  Shuffle,
 } from 'lucide-react';
 import { MathText } from '../common/MathRenderer';
 import { soundFX } from '../../utils/soundEffects';
@@ -54,10 +56,18 @@ export const WeaknessPracticeOverlay: React.FC<WeaknessPracticeOverlayProps> = (
   onClose,
   onRecordCompleted,
 }) => {
-  // Extract 10 themed questions for this topic
-  const questions = useMemo(() => {
-    return extractPracticeQuestions(topic, subject, questionBank, quizzes);
-  }, [topic, subject, questionBank, quizzes]);
+  const [drillIteration, setDrillIteration] = useState(1);
+  const previouslySeenIdsRef = useRef<Set<string>>(new Set());
+
+  // Extract fresh randomized 10 themed questions from the school database
+  const [questions, setQuestions] = useState<InteractivePracticeQuestion[]>(() => {
+    const initial = extractPracticeQuestions(topic, subject, questionBank, quizzes, {
+      excludeIds: [],
+      seed: Date.now(),
+    });
+    initial.forEach((q) => previouslySeenIdsRef.current.add(q.id));
+    return initial;
+  });
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -73,6 +83,40 @@ export const WeaknessPracticeOverlay: React.FC<WeaknessPracticeOverlayProps> = (
   const [expandedReviewIdx, setExpandedReviewIdx] = useState<number | null>(null);
   const [savingRecord, setSavingRecord] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Generate a completely new randomized set of 10 questions from the database
+  const generateFreshSet = (notify = false) => {
+    const excludeIds: string[] = Array.from(previouslySeenIdsRef.current);
+    const newQuestions = extractPracticeQuestions(topic, subject, questionBank, quizzes, {
+      excludeIds,
+      seed: Date.now() + Math.random(),
+    });
+
+    newQuestions.forEach((q) => previouslySeenIdsRef.current.add(q.id));
+    if (previouslySeenIdsRef.current.size > 60) {
+      previouslySeenIdsRef.current.clear();
+      newQuestions.forEach((q) => previouslySeenIdsRef.current.add(q.id));
+    }
+
+    setQuestions(newQuestions);
+    setSelectedAnswers({});
+    setTypedAnswers({});
+    setMatchingAnswers({});
+    setIsSubmitted({});
+    setStructureCorrectness({});
+    setMatchingCorrectness({});
+    setCurrentIndex(0);
+    setIsCompleted(false);
+    setStreak(0);
+    setSecondsElapsed(0);
+    setExpandedReviewIdx(null);
+    setSavedSuccess(false);
+    setDrillIteration((prev) => prev + 1);
+
+    if (notify) {
+      soundFX.playClick();
+    }
+  };
 
   // Timer
   const [secondsElapsed, setSecondsElapsed] = useState(0);
@@ -361,8 +405,12 @@ export const WeaknessPracticeOverlay: React.FC<WeaknessPracticeOverlayProps> = (
                 <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">
                   {subject}
                 </span>
-                <span className="text-[11px] font-bold text-slate-300">
-                  Weakness Recovery Drill (10 Questions)
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <Dices className="w-3 h-3 text-emerald-400" />
+                  Randomized Set #{drillIteration}
+                </span>
+                <span className="hidden md:inline text-[11px] font-bold text-slate-300">
+                  Weakness Recovery Drill
                 </span>
               </div>
               <h2 className="text-base font-bold text-white font-['Plus_Jakarta_Sans',sans-serif] truncate max-w-xs sm:max-w-md">
@@ -371,7 +419,28 @@ export const WeaknessPracticeOverlay: React.FC<WeaknessPracticeOverlayProps> = (
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {/* Shuffle / Randomize Button */}
+            {!isCompleted && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    Object.keys(selectedAnswers).length === 0 ||
+                    window.confirm('Shuffle and load a completely new randomized set of 10 questions from the database?')
+                  ) {
+                    generateFreshSet(true);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Shuffle and generate a different set of questions from the database"
+                id="shuffle-practice-drill-btn"
+              >
+                <Shuffle className="w-3.5 h-3.5 text-indigo-200" />
+                <span className="hidden sm:inline">Shuffle Set</span>
+              </button>
+            )}
+
             {/* Streak Counter */}
             {streak > 1 && !isCompleted && (
               <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold animate-bounce">
@@ -972,19 +1041,12 @@ export const WeaknessPracticeOverlay: React.FC<WeaknessPracticeOverlayProps> = (
             <div className="w-full flex items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  // Reset drill
-                  setSelectedAnswers({});
-                  setIsSubmitted({});
-                  setCurrentIndex(0);
-                  setIsCompleted(false);
-                  setStreak(0);
-                  setSecondsElapsed(0);
-                }}
-                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-colors"
+                onClick={() => generateFreshSet(true)}
+                className="px-4 py-2 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-xs font-bold text-indigo-900 flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+                id="practice-again-fresh-set-btn"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Practice Again (10 New Drills)</span>
+                <Shuffle className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Practice Again (Generate Different 10 Qs)</span>
               </button>
 
               <button
