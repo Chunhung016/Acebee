@@ -63,8 +63,8 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
 
   // Matching state
   const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>([
-    { left: '', right: '' },
-    { left: '', right: '' },
+    { id: 'pair-1', left: '', right: '' },
+    { id: 'pair-2', left: '', right: '' },
   ]);
 
   // Dynamically update available subjects based on grade level
@@ -115,8 +115,8 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
       setAcceptableAnswersText('');
       setCaseSensitive(false);
       setMatchingPairs([
-        { left: '', right: '' },
-        { left: '', right: '' },
+        { id: 'pair-1', left: '', right: '' },
+        { id: 'pair-2', left: '', right: '' },
       ]);
     }
   }, [editingItem, isOpen, defaultSubject, defaultGrade]);
@@ -163,7 +163,7 @@ export const SingleQuestionModal: React.FC<SingleQuestionModalProps> = ({
   };
 
   const handleAddPair = () => {
-    setMatchingPairs([...matchingPairs, { left: '', right: '' }]);
+    setMatchingPairs([...matchingPairs, { id: `pair-${Date.now()}-${matchingPairs.length + 1}`, left: '', right: '' }]);
   };
 
   const handleRemovePair = (idx: number) => {

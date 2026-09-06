@@ -7,6 +7,7 @@ import { AdminDashboard } from './components/admin/AdminDashboard';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { StudentDashboard } from './components/student/StudentDashboard';
 import { ParentDashboard } from './components/parent/ParentDashboard';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import {
   MapPin,
   Phone,
@@ -23,13 +24,29 @@ const MainLayout: React.FC = () => {
       }
       switch (currentUser.role) {
         case 'admin':
-          return <AdminDashboard />;
+          return (
+            <ErrorBoundary fallbackTitle="Admin Portal Error">
+              <AdminDashboard />
+            </ErrorBoundary>
+          );
         case 'teacher':
-          return <TeacherDashboard />;
+          return (
+            <ErrorBoundary fallbackTitle="Teacher Portal Error">
+              <TeacherDashboard />
+            </ErrorBoundary>
+          );
         case 'student':
-          return <StudentDashboard />;
+          return (
+            <ErrorBoundary fallbackTitle="Student Portal Error">
+              <StudentDashboard />
+            </ErrorBoundary>
+          );
         case 'parent':
-          return <ParentDashboard />;
+          return (
+            <ErrorBoundary fallbackTitle="Parent Portal Error">
+              <ParentDashboard />
+            </ErrorBoundary>
+          );
         default:
           return <PublicDashboard />;
       }

@@ -35,7 +35,7 @@ interface QuizStatisticsModalProps {
   quiz: Quiz | null;
   isOpen: boolean;
   onClose: () => void;
-  onReuseQuiz: (quiz: Quiz) => void;
+  onReuseQuiz: (quiz: Quiz, cloneSettings?: boolean) => void;
   onOpenParentProfile: (
     studentId: string,
     quizContext?: {
@@ -101,13 +101,15 @@ export const QuizStatisticsModal: React.FC<QuizStatisticsModalProps> = ({
   const submissionsForQuiz = quizResults.filter((r) => r.quizId === quiz.id);
 
   // Determine ongoing vs previous/completed
-  const isPastDue = new Date(quiz.dueDate).getTime() < new Date().setHours(0, 0, 0, 0);
+  const isPastDue = quiz.dueDate ? new Date(quiz.dueDate).getTime() < new Date().setHours(0, 0, 0, 0) : false;
   const totalAssignedCount = assignedStudents.length;
   const totalSubmittedCount = submissionsForQuiz.length;
   const submissionRate = totalAssignedCount > 0 ? Math.round((totalSubmittedCount / totalAssignedCount) * 100) : 0;
 
   // Calculate scores & averages
-  const scores = submissionsForQuiz.map((r) => r.percentage);
+  const scores = submissionsForQuiz
+    .map((r) => (typeof r.percentage === 'number' ? r.percentage : 0))
+    .filter((s) => !isNaN(s));
   const averageScore = scores.length > 0
     ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
     : 0;
@@ -115,9 +117,12 @@ export const QuizStatisticsModal: React.FC<QuizStatisticsModalProps> = ({
   const lowestScore = scores.length > 0 ? Math.min(...scores) : 0;
   const passCount = scores.filter((s) => s >= 50).length;
   const passRate = scores.length > 0 ? Math.round((passCount / scores.length) * 100) : 0;
-  const pendingReviewCount = submissionsForQuiz.filter((r) => r.status === 'awaiting_review').length;
+  const pendingReviewCount = submissionsForQuiz.filter(
+    (r) => r.status === 'pending_review' || (r.status as string) === 'awaiting_review'
+  ).length;
 
-  const totalPoints = quiz.questions.reduce((sum, q) => sum + (q.points || 1), 0);
+  const questionsList = quiz.questions || [];
+  const totalPoints = questionsList.reduce((sum, q) => sum + (q?.points || 1), 0);
 
   // Grade bands
   const distinctionCount = scores.filter((s) => s >= 80).length;
@@ -126,23 +131,24 @@ export const QuizStatisticsModal: React.FC<QuizStatisticsModalProps> = ({
   const supportCount = scores.filter((s) => s < 50).length;
 
   // Filter students roster
-  const filteredStudents = assignedStudents.filter(({ user, detail }) => {
+  const filteredStudents = assignedStudents.filter(({ user }) => {
     if (!user) return false;
     const nameMatch =
-      user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+      (user.fullName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.email || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     const result = submissionsForQuiz.find((r) => r.studentId === user.id);
     if (!nameMatch) return false;
 
-    if (statusFilter === 'graded') return result && result.status !== 'awaiting_review';
-    if (statusFilter === 'pending') return result && result.status === 'awaiting_review';
+    const isPending = result && (result.status === 'pending_review' || (result.status as string) === 'awaiting_review');
+    if (statusFilter === 'graded') return result && !isPending;
+    if (statusFilter === 'pending') return isPending;
     if (statusFilter === 'unsubmitted') return !result;
     return true;
   });
 
   // Question-by-question Item Analysis
-  const itemAnalysis = quiz.questions.map((q, idx) => {
+  const itemAnalysis = questionsList.map((q, idx) => {
     let correctAnswersCount = 0;
     let attemptedCount = 0;
     const optionCounts: Record<number, number> = {};
@@ -154,8 +160,9 @@ export const QuizStatisticsModal: React.FC<QuizStatisticsModalProps> = ({
         if (ansRec.isCorrect || (ansRec.pointsAwarded && ansRec.pointsAwarded >= (q.points || 1))) {
           correctAnswersCount++;
         }
-        if (typeof ansRec.selectedOptionIndex === 'number') {
-          optionCounts[ansRec.selectedOptionIndex] = (optionCounts[ansRec.selectedOptionIndex] || 0) + 1;
+        const optIndex = typeof ansRec.selectedOption === 'number' ? ansRec.selectedOption : ansRec.selectedOptionIndex;
+        if (typeof optIndex === 'number') {
+          optionCounts[optIndex] = (optionCounts[optIndex] || 0) + 1;
         }
       }
     });

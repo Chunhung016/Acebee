@@ -16,6 +16,7 @@ import { PreviousQuizPickerModal } from './PreviousQuizPickerModal';
 import {
   BookOpen,
   Users,
+  UserCheck,
   Award,
   MessageSquare,
   MessageCircle,
@@ -79,22 +80,25 @@ export const TeacherDashboard: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Find all classes assigned to this teacher
-  const teacherClasses = classes.filter((c) => c.teacherId === currentUser?.id);
-  const availableClasses = teacherClasses.length > 0 ? teacherClasses : classes;
+  const safeClasses = classes || [];
+  const teacherClasses = safeClasses.filter((c) => c && c.teacherId === currentUser?.id);
+  const availableClasses = teacherClasses.length > 0 ? teacherClasses : safeClasses;
 
   const [selectedClassId, setSelectedClassId] = useState<string>(() => {
-    return teacherClasses[0]?.id || classes[0]?.id || '';
+    return teacherClasses[0]?.id || safeClasses[0]?.id || '';
   });
 
   // Ensure selectedClassId stays valid if classes list changes
   useEffect(() => {
-    if (availableClasses.length > 0 && !availableClasses.some((c) => c.id === selectedClassId)) {
-      setSelectedClassId(availableClasses[0].id);
+    if (availableClasses.length > 0 && !availableClasses.some((c) => c && c.id === selectedClassId)) {
+      if (availableClasses[0]?.id) {
+        setSelectedClassId(availableClasses[0].id);
+      }
     }
   }, [availableClasses, selectedClassId]);
 
-  const currentClass = classes.find((c) => c.id === selectedClassId) || availableClasses[0] || classes[0];
-  const assignedStudentDetails = studentDetails.filter((d) => d.classId === currentClass?.id);
+  const currentClass = safeClasses.find((c) => c && c.id === selectedClassId) || availableClasses[0] || safeClasses[0];
+  const assignedStudentDetails = (studentDetails || []).filter((d) => d && d.classId === currentClass?.id);
 
   // Editing Student Detail State
   const [editingStudentDetail, setEditingStudentDetail] = useState<StudentDetail | null>(null);
@@ -156,12 +160,12 @@ export const TeacherDashboard: React.FC = () => {
   }, [currentClass, quizClassId]);
 
   // Synchronize available subjects based on selected class
-  const selectedClassObjForQuiz = classes.find((c) => c.id === quizClassId) || currentClass;
+  const selectedClassObjForQuiz = safeClasses.find((c) => c && c.id === quizClassId) || currentClass;
   const quizGradeLevel = selectedClassObjForQuiz?.gradeLevel || 'Year 5';
   const subjectsForQuizClass = getSubjectsForLevel(quizGradeLevel);
 
   useEffect(() => {
-    if (subjectsForQuizClass.length > 0 && !subjectsForQuizClass.includes(quizSubject)) {
+    if (subjectsForQuizClass && subjectsForQuizClass.length > 0 && !subjectsForQuizClass.includes(quizSubject)) {
       setQuizSubject(subjectsForQuizClass[0]);
     }
   }, [quizClassId, quizGradeLevel, subjectsForQuizClass, quizSubject]);
@@ -173,8 +177,8 @@ export const TeacherDashboard: React.FC = () => {
 
   useEffect(() => {
     if (assignedStudentDetails.length > 0) {
-      if (!assignedStudentDetails.some((d) => d.studentId === selectedStudentId)) {
-        setSelectedStudentId(assignedStudentDetails[0].studentId);
+      if (!assignedStudentDetails.some((d) => d?.studentId === selectedStudentId)) {
+        setSelectedStudentId(assignedStudentDetails[0]?.studentId || '');
       }
     } else {
       setSelectedStudentId('');
@@ -540,29 +544,31 @@ export const TeacherDashboard: React.FC = () => {
 
   // Quizzes displayed with status/scope filtering and search
   const { displayQuizzes, ongoingQuizzesCount, previousQuizzesCount } = useMemo(() => {
+    const safeQuizzes = quizzes || [];
     const baseList = quizScopeFilter === 'class'
-      ? quizzes.filter((q) => q.classId === currentClass?.id || q.assignedClassIds?.includes(currentClass?.id || ''))
-      : quizzes;
+      ? safeQuizzes.filter((q) => q.classId === currentClass?.id || q.assignedClassIds?.includes(currentClass?.id || ''))
+      : safeQuizzes;
 
     let ongoing = 0;
     let previous = 0;
     const nowTime = new Date().setHours(0, 0, 0, 0);
 
     baseList.forEach((q) => {
-      const isPast = new Date(q.dueDate).getTime() < nowTime;
+      const isPast = q?.dueDate ? new Date(q.dueDate).getTime() < nowTime : false;
       if (isPast) previous++;
       else ongoing++;
     });
 
     const filtered = baseList.filter((q) => {
+      if (!q) return false;
       const matchesSearch =
-        q.title.toLowerCase().includes(quizSearchText.toLowerCase()) ||
-        q.subject.toLowerCase().includes(quizSearchText.toLowerCase()) ||
-        q.description.toLowerCase().includes(quizSearchText.toLowerCase());
+        (q.title || '').toLowerCase().includes(quizSearchText.toLowerCase()) ||
+        (q.subject || '').toLowerCase().includes(quizSearchText.toLowerCase()) ||
+        (q.description || '').toLowerCase().includes(quizSearchText.toLowerCase());
 
       if (!matchesSearch) return false;
 
-      const isPast = new Date(q.dueDate).getTime() < nowTime;
+      const isPast = q.dueDate ? new Date(q.dueDate).getTime() < nowTime : false;
       if (quizFilterStatus === 'ongoing') return !isPast;
       if (quizFilterStatus === 'previous') return isPast;
       return true;
@@ -576,15 +582,16 @@ export const TeacherDashboard: React.FC = () => {
   }, [quizzes, currentClass, quizScopeFilter, quizFilterStatus, quizSearchText]);
 
   // Teacher Comments history
-  const teacherCommentsList = teacherComments.filter(
-    (c) => c.teacherId === currentUser?.id
+  const teacherCommentsList = (teacherComments || []).filter(
+    (c) => c && c.teacherId === currentUser?.id
   );
 
   // Pending review submissions for teacher
-  const teacherClassIds = availableClasses.map((c) => c.id);
+  const teacherClassIds = (availableClasses || []).map((c) => c?.id).filter(Boolean);
   const pendingReviewCount = useMemo(() => {
-    return quizResults.filter((r) => {
-      const q = quizzes.find((quiz) => quiz.id === r.quizId);
+    return (quizResults || []).filter((r) => {
+      if (!r) return false;
+      const q = (quizzes || []).find((quiz) => quiz?.id === r.quizId);
       const isTeacherQuiz = q?.teacherId === currentUser?.id;
       const isTeacherClass = teacherClassIds.includes(r.classId || q?.classId || '');
       return r.status === 'pending_review' && (isTeacherQuiz || isTeacherClass);
@@ -593,9 +600,9 @@ export const TeacherDashboard: React.FC = () => {
 
   // Class weakness practices count
   const { classPracticesCount, unnoticedPracticeCount } = useMemo(() => {
-    const classStudentIds = new Set(assignedStudentDetails.map((d) => d.studentId));
-    const list = weaknessPractices.filter(
-      (p) => classStudentIds.has(p.studentId) || (p.classId && p.classId === currentClass?.id)
+    const classStudentIds = new Set(assignedStudentDetails.map((d) => d?.studentId).filter(Boolean));
+    const list = (weaknessPractices || []).filter(
+      (p) => p && (classStudentIds.has(p.studentId) || (p.classId && p.classId === currentClass?.id))
     );
     const unnoticed = list.filter((p) => !p.teacherNoticed).length;
     return { classPracticesCount: list.length, unnoticedPracticeCount: unnoticed };
@@ -824,7 +831,16 @@ export const TeacherDashboard: React.FC = () => {
             </div>
 
             <div className="divide-y divide-slate-100">
-              {assignedStudentDetails.map((det) => {
+              {assignedStudentDetails.length === 0 ? (
+                <div className="p-12 text-center space-y-2">
+                  <UserCheck className="w-9 h-9 text-slate-300 mx-auto" />
+                  <h4 className="text-sm font-bold text-slate-700">No students currently enrolled in this class</h4>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Students can be registered and assigned to {currentClass?.name || 'this class'} via the Administrator directory, or choose another classroom from the class selector.
+                  </p>
+                </div>
+              ) : (
+                assignedStudentDetails.map((det) => {
                 const studentUser = users.find((u) => u.id === det.studentId);
                 const isEditing = editingStudentDetail?.studentId === det.studentId;
 
@@ -1040,7 +1056,7 @@ export const TeacherDashboard: React.FC = () => {
                     )}
                   </div>
                 );
-              })}
+              }))}
             </div>
           </div>
         </div>
@@ -1923,8 +1939,8 @@ export const TeacherDashboard: React.FC = () => {
                         ).toFixed(1)
                       : 'N/A';
 
-                  const isPast = new Date(quiz.dueDate).getTime() < new Date().setHours(0, 0, 0, 0);
-                  const totalQuizPoints = quiz.questions.reduce((sum, q) => sum + (q.points || 1), 0);
+                  const isPast = quiz.dueDate ? new Date(quiz.dueDate).getTime() < new Date().setHours(0, 0, 0, 0) : false;
+                  const totalQuizPoints = (quiz.questions || []).reduce((sum, q) => sum + (q.points || 1), 0);
 
                   return (
                     <div
@@ -2008,7 +2024,7 @@ export const TeacherDashboard: React.FC = () => {
                         <div className="flex items-center gap-3 text-slate-500 flex-wrap">
                           <span className="flex items-center gap-1">
                             <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-                            {quiz.questions.length} Questions ({totalQuizPoints} pts)
+                            {(quiz.questions || []).length} Questions ({totalQuizPoints} pts)
                           </span>
                           <span>•</span>
                           <span>{quiz.timeLimitMinutes} min lock</span>
@@ -2368,6 +2384,7 @@ export const TeacherDashboard: React.FC = () => {
       <PreviousQuizPickerModal
         isOpen={isPreviousQuizPickerOpen}
         onClose={() => setIsPreviousQuizPickerOpen(false)}
+        quizzes={quizzes || []}
         onImportQuestions={handleImportQuestionsFromPicker}
         currentSubject={quizSubject}
       />

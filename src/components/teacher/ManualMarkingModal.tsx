@@ -355,8 +355,16 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
                   <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl space-y-1.5 text-xs">
                     <span className="text-[11px] font-bold text-amber-900">Student Matched Pairs:</span>
                     {q.matchingPairs?.map((pair, pIdx) => {
-                      const studentPair = answerRecord?.matchedPairs?.find((mp) => mp.left === pair.left);
-                      const isPairMatch = studentPair && studentPair.right === pair.right;
+                      const studentPair = Array.isArray(answerRecord?.matchedPairs)
+                        ? answerRecord.matchedPairs.find((mp: any) => mp.left === pair.left)
+                        : null;
+                      const studentRight = studentPair
+                        ? studentPair.right
+                        : answerRecord?.matchingAnswers?.[pair.id] ||
+                          (typeof answerRecord?.matchedPairs === 'object' && answerRecord?.matchedPairs !== null
+                            ? (answerRecord.matchedPairs as Record<string, string>)[pair.left]
+                            : undefined);
+                      const isPairMatch = studentRight === pair.right;
                       return (
                         <div
                           key={pIdx}
@@ -365,7 +373,7 @@ export const ManualMarkingModal: React.FC<ManualMarkingModalProps> = ({
                           <span className="font-medium text-slate-800"><MathText text={pair.left} /></span>
                           <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
                           <span className={isPairMatch ? 'text-emerald-700 font-bold' : 'text-rose-700 font-bold'}>
-                            {studentPair?.right ? <MathText text={studentPair.right} /> : 'Unmatched'}
+                            {studentRight ? <MathText text={studentRight} /> : 'Unmatched'}
                           </span>
                           {!isPairMatch && (
                             <span className="text-[10px] text-emerald-800">

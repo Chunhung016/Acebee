@@ -19,6 +19,7 @@ interface QuestionBankPickerModalProps {
   onClose: () => void;
   onSelectQuestions: (questions: QuizQuestion[]) => void;
   filterSubject?: Subject;
+  defaultSubject?: Subject;
 }
 
 export const QuestionBankPickerModal: React.FC<QuestionBankPickerModalProps> = ({
@@ -26,10 +27,11 @@ export const QuestionBankPickerModal: React.FC<QuestionBankPickerModalProps> = (
   onClose,
   onSelectQuestions,
   filterSubject,
+  defaultSubject,
 }) => {
   const { questionBank } = useApp();
   const [search, setSearch] = useState('');
-  const [subjectFilter, setSubjectFilter] = useState<string>(filterSubject || 'All');
+  const [subjectFilter, setSubjectFilter] = useState<string>(filterSubject || defaultSubject || 'All');
   const [topicFilter, setTopicFilter] = useState<string>('All');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

@@ -59,9 +59,9 @@ export const TeacherRemediationView: React.FC<TeacherRemediationViewProps> = ({ 
         (selectedStatusFilter === 'noticed' && p.teacherNoticed);
       const matchQuery =
         searchQuery.trim() === '' ||
-        p.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.subject.toLowerCase().includes(searchQuery.toLowerCase());
+        (p.studentName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.topic || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.subject || '').toLowerCase().includes(searchQuery.toLowerCase());
 
       return matchStudent && matchStatus && matchQuery;
     });
@@ -70,17 +70,18 @@ export const TeacherRemediationView: React.FC<TeacherRemediationViewProps> = ({ 
   // Aggregate Metrics
   const metrics = useMemo(() => {
     const total = classPractices.length;
-    const uniqueStudents = new Set(classPractices.map((p) => p.studentId)).size;
+    const uniqueStudents = new Set(classPractices.map((p) => p.studentId).filter(Boolean)).size;
     const avgScore =
       total > 0
-        ? Math.round(classPractices.reduce((sum, p) => sum + p.scorePercentage, 0) / total)
+        ? Math.round(classPractices.reduce((sum, p) => sum + (p.scorePercentage || 0), 0) / total)
         : 0;
     const unnoticedCount = classPractices.filter((p) => !p.teacherNoticed).length;
 
     // Top practiced topics
     const topicFrequency: Record<string, number> = {};
     classPractices.forEach((p) => {
-      topicFrequency[p.topic] = (topicFrequency[p.topic] || 0) + 1;
+      const topKey = p.topic || 'General Review';
+      topicFrequency[topKey] = (topicFrequency[topKey] || 0) + 1;
     });
     const sortedTopics = Object.entries(topicFrequency)
       .sort((a, b) => b[1] - a[1])

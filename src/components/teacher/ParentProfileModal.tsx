@@ -93,26 +93,38 @@ export const ParentProfileModal: React.FC<ParentProfileModalProps> = ({
   );
 
   // Student's recent results
-  const studentResults = quizResults
+  const studentResults = (quizResults || [])
     .filter((r) => r.studentId === studentId)
-    .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+    .sort((a, b) => {
+      const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      return bTime - aTime;
+    });
 
   const averagePercentage =
     studentResults.length > 0
       ? (
-          studentResults.reduce((acc, r) => acc + r.percentage, 0) / studentResults.length
+          studentResults.reduce((acc, r) => acc + (r.percentage || 0), 0) / studentResults.length
         ).toFixed(1)
       : 'N/A';
 
   // Comments sent to this parent/student
-  const studentComments = teacherComments
+  const studentComments = (teacherComments || [])
     .filter((c) => c.studentId === studentId || (detail?.parentId && c.parentId === detail.parentId))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => {
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
 
   // Alerts sent to this parent
-  const studentAlerts = parentAlerts
+  const studentAlerts = (parentAlerts || [])
     .filter((a) => a.studentId === studentId)
-    .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+    .sort((a, b) => {
+      const bTime = b.sentAt ? new Date(b.sentAt).getTime() : 0;
+      const aTime = a.sentAt ? new Date(a.sentAt).getTime() : 0;
+      return bTime - aTime;
+    });
 
   // WhatsApp click-to-chat URL
   const cleanDigits = parentPhone.replace(/[^\d+]/g, '');

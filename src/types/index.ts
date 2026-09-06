@@ -143,9 +143,11 @@ export interface QuizAnswerRecord {
   questionId: string;
   type?: QuestionType;
   selectedOption?: number; // for MCQ
+  selectedOptionIndex?: number; // optional alias for MCQ
   textAnswer?: string; // for Structure & Fill in Blank
   studentAttachmentUrl?: string; // submitted image/file for essay or structure questions
   matchingAnswers?: Record<string, string>; // pairId -> selected right item for Matching
+  matchedPairs?: { left: string; right: string; }[] | Record<string, string> | any; // optional alias for Matching
   isCorrect?: boolean;
   pointsAwarded?: number;
   maxPoints?: number;
@@ -154,7 +156,7 @@ export interface QuizAnswerRecord {
 
 export type StudentAnswerRecord = QuizAnswerRecord;
 
-export type QuizResultStatus = 'pending_review' | 'graded';
+export type QuizResultStatus = 'pending_review' | 'graded' | 'awaiting_review' | 'in_progress';
 
 export interface QuizResult {
   id: string;
@@ -260,6 +262,7 @@ export interface WeaknessPracticeRecord {
   totalQuestions: number; // exactly 10 questions
   correctAnswers: number;
   scorePercentage: number;
+  score?: number; // optional alias for correctAnswers
   timeSpentSeconds: number;
   completedAt: string;
   xpEarned: number;

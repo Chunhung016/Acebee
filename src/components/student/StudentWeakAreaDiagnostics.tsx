@@ -181,8 +181,10 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
               studentResponse = ans.textAnswer || 'Blank / Unattempted';
               correctAnswer = qObj.modelAnswer || qObj.acceptableAnswers?.join(' / ') || 'Refer to rubric';
             } else if (qObj.type === 'matching') {
-              studentResponse = ans.matchedPairs
-                ? ans.matchedPairs.map((p) => `${p.left} → ${p.right || '?'}`).join(', ')
+              studentResponse = Array.isArray(ans.matchedPairs)
+                ? ans.matchedPairs.map((p: any) => `${p.left} → ${p.right || '?'}`).join(', ')
+                : ans.matchedPairs && typeof ans.matchedPairs === 'object'
+                ? Object.entries(ans.matchedPairs as Record<string, string>).map(([l, r]) => `${l} → ${r || '?'}`).join(', ')
                 : 'Incomplete';
               correctAnswer = qObj.matchingPairs
                 ? qObj.matchingPairs.map((p) => `${p.left} → ${p.right}`).join(', ')

@@ -27,10 +27,11 @@ interface PreviousQuizPickerModalProps {
 export const PreviousQuizPickerModal: React.FC<PreviousQuizPickerModalProps> = ({
   isOpen,
   onClose,
-  quizzes,
+  quizzes = [],
   currentSubject,
   onImportQuestions,
 }) => {
+  const safeQuizzes = quizzes || [];
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [expandedQuizId, setExpandedQuizId] = useState<string | null>(null);
@@ -38,15 +39,16 @@ export const PreviousQuizPickerModal: React.FC<PreviousQuizPickerModalProps> = (
 
   // Filter quizzes
   const filteredQuizzes = useMemo(() => {
-    return quizzes.filter((qz) => {
+    return safeQuizzes.filter((qz) => {
+      if (!qz) return false;
       const matchesSearch =
-        qz.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        qz.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        qz.description.toLowerCase().includes(searchQuery.toLowerCase());
+        (qz.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (qz.subject || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (qz.description || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesSubject = selectedSubject === 'all' || qz.subject === selectedSubject;
       return matchesSearch && matchesSubject;
     });
-  }, [quizzes, searchQuery, selectedSubject]);
+  }, [safeQuizzes, searchQuery, selectedSubject]);
 
   if (!isOpen) return null;
 
@@ -91,7 +93,7 @@ export const PreviousQuizPickerModal: React.FC<PreviousQuizPickerModalProps> = (
     onClose();
   };
 
-  const allSubjects = Array.from(new Set(quizzes.map((q) => q.subject)));
+  const allSubjects = Array.from(new Set(safeQuizzes.map((q) => q?.subject).filter(Boolean))) as string[];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
