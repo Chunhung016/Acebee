@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getSubjectsForLevel } from '../../utils/subjectHelper';
-import { QuestionBankItem, QuizQuestion, Subject, StudentDetail, QuestionType, MatchingPair, CommentCategory } from '../../types';
+import { QuestionBankItem, QuizQuestion, Subject, StudentDetail, QuestionType, MatchingPair, CommentCategory, Quiz } from '../../types';
 import { removeDollarDelimiters } from '../../utils/mathParser';
 import { UserAvatar } from '../common/UserAvatar';
 import { QuestionBankView } from '../questions/QuestionBankView';
@@ -10,6 +10,9 @@ import { MarkdownBulkImportModal } from '../questions/MarkdownBulkImportModal';
 import { TeacherGradingView } from './TeacherGradingView';
 import { ParentAlertsView } from '../alerts/ParentAlertsView';
 import { TeacherRemediationView } from './TeacherRemediationView';
+import { QuizStatisticsModal } from './QuizStatisticsModal';
+import { ParentProfileModal } from './ParentProfileModal';
+import { PreviousQuizPickerModal } from './PreviousQuizPickerModal';
 import {
   BookOpen,
   Users,
@@ -43,6 +46,12 @@ import {
   Image as ImageIcon,
   Upload,
   Zap,
+  BarChart3,
+  TrendingUp,
+  Copy,
+  Filter,
+  Search,
+  ArrowUpRight,
 } from 'lucide-react';
 
 export const TeacherDashboard: React.FC = () => {
@@ -119,6 +128,25 @@ export const TeacherDashboard: React.FC = () => {
   // Modals for question bank and bulk key-in
   const [isBankPickerOpen, setIsBankPickerOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+
+  // Modals for quiz statistics, parent profile, and previous quiz re-use
+  const [selectedQuizForStats, setSelectedQuizForStats] = useState<Quiz | null>(null);
+  const [selectedStudentForParentProfile, setSelectedStudentForParentProfile] = useState<string | null>(null);
+  const [parentProfileQuizContext, setParentProfileQuizContext] = useState<{
+    quizId: string;
+    quizTitle: string;
+    subject: string;
+    score?: number;
+    totalPoints?: number;
+    percentage?: number;
+  } | null>(null);
+  const [isPreviousQuizPickerOpen, setIsPreviousQuizPickerOpen] = useState(false);
+  const [reusedQuizNotice, setReusedQuizNotice] = useState<string | null>(null);
+
+  // Filters for quizzes list
+  const [quizFilterStatus, setQuizFilterStatus] = useState<'all' | 'ongoing' | 'previous'>('all');
+  const [quizScopeFilter, setQuizScopeFilter] = useState<'all' | 'class'>('all');
+  const [quizSearchText, setQuizSearchText] = useState('');
 
   // Sync quizClassId with currentClass when currentClass changes and quizClassId is not set
   useEffect(() => {
@@ -335,6 +363,89 @@ export const TeacherDashboard: React.FC = () => {
     setActiveTab('quizzes');
   };
 
+  // Re-use an existing quiz question set (from past or ongoing quiz)
+  const handleReuseQuiz = (sourceQuiz: Quiz, cloneSettings: boolean = false) => {
+    const clonedQuestions: QuizQuestion[] = sourceQuiz.questions.map((q, idx) => ({
+      ...q,
+      id: `q-reused-${Date.now().toString(36)}-${idx}`,
+      question: removeDollarDelimiters(q.question),
+      options: q.options?.map(removeDollarDelimiters),
+      modelAnswer: q.modelAnswer ? removeDollarDelimiters(q.modelAnswer) : undefined,
+      guidelines: q.guidelines ? removeDollarDelimiters(q.guidelines) : undefined,
+      acceptableAnswers: q.acceptableAnswers?.map(removeDollarDelimiters),
+      matchingPairs: q.matchingPairs?.map((p) => ({
+        ...p,
+        left: removeDollarDelimiters(p.left),
+        right: removeDollarDelimiters(p.right),
+      })),
+      explanation: q.explanation ? removeDollarDelimiters(q.explanation) : undefined,
+    }));
+
+    setQuestions(clonedQuestions);
+    setQuizSubject(sourceQuiz.subject);
+
+    if (cloneSettings) {
+      setQuizTitle(`${sourceQuiz.title} (Practice / Re-take)`);
+      setQuizDescription(sourceQuiz.description || '');
+      setQuizTimeLimit(sourceQuiz.timeLimitMinutes || 15);
+      setQuizMaxAttempts(sourceQuiz.maxAttempts || 1);
+      setQuizMarkingMode(sourceQuiz.markingMode || 'auto');
+      setQuizShuffleQuestions(Boolean(sourceQuiz.shuffleQuestions));
+      setQuizShuffleOptions(Boolean(sourceQuiz.shuffleOptions));
+    } else {
+      if (!quizTitle.trim()) {
+        setQuizTitle(`${sourceQuiz.title} (Re-take / Practice)`);
+      }
+      if (clonedQuestions.some((q) => q.type === 'structure')) {
+        setQuizMarkingMode('manual');
+      }
+    }
+
+    setActiveTab('quizzes');
+    setSelectedQuizForStats(null);
+    setIsPreviousQuizPickerOpen(false);
+
+    setReusedQuizNotice(
+      `Successfully loaded ${clonedQuestions.length} question(s) from "${sourceQuiz.title}". You can modify questions, adjust settings, and publish!`
+    );
+
+    setTimeout(() => {
+      const creatorElem = document.getElementById('quiz-creator-section');
+      if (creatorElem) {
+        creatorElem.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
+  };
+
+  const handleImportQuestionsFromPicker = (
+    importedQuestions: QuizQuestion[],
+    sourceQuiz?: Quiz,
+    cloneFullSettings: boolean = false
+  ) => {
+    if (cloneFullSettings && sourceQuiz) {
+      handleReuseQuiz(sourceQuiz, true);
+      return;
+    }
+
+    setQuestions((prev) => {
+      const existing = prev.filter((q) => q.question.trim().length > 0);
+      return [...existing, ...importedQuestions];
+    });
+
+    if (importedQuestions.some((q) => q.type === 'structure')) {
+      setQuizMarkingMode('manual');
+    }
+
+    if (sourceQuiz && !quizTitle.trim()) {
+      setQuizTitle(`${sourceQuiz.subject} Quiz - Set`);
+      setQuizSubject(sourceQuiz.subject);
+    }
+
+    setReusedQuizNotice(
+      `Imported ${importedQuestions.length} question(s) into active draft${sourceQuiz ? ` from "${sourceQuiz.title}"` : ''}.`
+    );
+  };
+
   // Handle Create Quiz Submit
   const handleCreateQuizSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -426,6 +537,43 @@ export const TeacherDashboard: React.FC = () => {
       teacherClasses.some((c) => c.id === q.classId) ||
       q.classId === currentClass?.id
   );
+
+  // Quizzes displayed with status/scope filtering and search
+  const { displayQuizzes, ongoingQuizzesCount, previousQuizzesCount } = useMemo(() => {
+    const baseList = quizScopeFilter === 'class'
+      ? quizzes.filter((q) => q.classId === currentClass?.id || q.assignedClassIds?.includes(currentClass?.id || ''))
+      : quizzes;
+
+    let ongoing = 0;
+    let previous = 0;
+    const nowTime = new Date().setHours(0, 0, 0, 0);
+
+    baseList.forEach((q) => {
+      const isPast = new Date(q.dueDate).getTime() < nowTime;
+      if (isPast) previous++;
+      else ongoing++;
+    });
+
+    const filtered = baseList.filter((q) => {
+      const matchesSearch =
+        q.title.toLowerCase().includes(quizSearchText.toLowerCase()) ||
+        q.subject.toLowerCase().includes(quizSearchText.toLowerCase()) ||
+        q.description.toLowerCase().includes(quizSearchText.toLowerCase());
+
+      if (!matchesSearch) return false;
+
+      const isPast = new Date(q.dueDate).getTime() < nowTime;
+      if (quizFilterStatus === 'ongoing') return !isPast;
+      if (quizFilterStatus === 'previous') return isPast;
+      return true;
+    });
+
+    return {
+      displayQuizzes: filtered,
+      ongoingQuizzesCount: ongoing,
+      previousQuizzesCount: previous,
+    };
+  }, [quizzes, currentClass, quizScopeFilter, quizFilterStatus, quizSearchText]);
 
   // Teacher Comments history
   const teacherCommentsList = teacherComments.filter(
@@ -738,15 +886,29 @@ export const TeacherDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() =>
-                          setEditingStudentDetail(isEditing ? null : { ...det })
-                        }
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors shrink-0"
-                      >
-                        <Edit className="w-3.5 h-3.5 text-blue-600" />
-                        <span>{isEditing ? 'Close' : 'Edit Details'}</span>
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedStudentForParentProfile(det.studentId);
+                            setParentProfileQuizContext(null);
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                          title="View Parent Profile & Direct Notes"
+                        >
+                          <Users className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Parent Profile</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            setEditingStudentDetail(isEditing ? null : { ...det })
+                          }
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+                        >
+                          <Edit className="w-3.5 h-3.5 text-blue-600" />
+                          <span>{isEditing ? 'Close' : 'Edit Details'}</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Inline Editing Form */}
@@ -888,7 +1050,7 @@ export const TeacherDashboard: React.FC = () => {
       {activeTab === 'quizzes' && (
         <div className="space-y-6 w-full">
           {/* Post New Quiz Form */}
-          <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs space-y-5 w-full">
+          <div id="quiz-creator-section" className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs space-y-5 w-full">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <span className="w-1.5 h-5 bg-blue-600 rounded-full shrink-0" />
               <div>
@@ -896,10 +1058,30 @@ export const TeacherDashboard: React.FC = () => {
                   Create Subject Quiz
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Assign a timed quiz to your students
+                  Assign a timed quiz to your students or re-use previous assessments
                 </p>
               </div>
             </div>
+
+            {reusedQuizNotice && (
+              <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 flex items-start justify-between gap-3 shadow-xs animate-in fade-in">
+                <div className="flex items-start gap-2.5">
+                  <Layers className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-blue-950">Question Set Loaded & Ready to Re-use</p>
+                    <p className="text-blue-800 text-[11px] mt-0.5">{reusedQuizNotice}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReusedQuizNotice(null)}
+                  className="p-1 text-blue-400 hover:text-blue-700 hover:bg-blue-100 rounded-md transition-colors cursor-pointer"
+                  title="Dismiss notice"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {quizSuccessMsg && (
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
@@ -1130,7 +1312,16 @@ export const TeacherDashboard: React.FC = () => {
                     <Database className="w-4 h-4 text-blue-300" />
                     <span className="text-xs font-bold">Question Bank & Bulk Tools</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviousQuizPickerOpen(true)}
+                      className="px-2.5 py-1 rounded-md bg-blue-700 hover:bg-blue-600 text-white text-[11px] font-bold border border-blue-500 flex items-center gap-1 shadow-xs cursor-pointer"
+                      title="Re-use questions from previous quizzes"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-blue-200" />
+                      <span>Re-use from Past Quiz ({quizzes.length})</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => setIsBankPickerOpen(true)}
@@ -1150,7 +1341,7 @@ export const TeacherDashboard: React.FC = () => {
                   </div>
                 </div>
                 <p className="text-[11px] text-blue-200">
-                  Select saved items from school-wide Question Bank or paste markdown formatted questions to quickly populate your quiz.
+                  Re-use past quiz sets, select saved items from Question Bank, or paste markdown formatted questions to quickly populate your quiz.
                 </p>
               </div>
 
@@ -1610,102 +1801,254 @@ export const TeacherDashboard: React.FC = () => {
 
           {/* Published Quizzes List */}
           <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs space-y-4 w-full">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-5 bg-blue-600 rounded-full shrink-0" />
-                <h3 className="font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                  Active Quizzes ({teacherQuizzes.length})
-                </h3>
+                <div>
+                  <h3 className="font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+                    Quizzes & Question Sets ({displayQuizzes.length})
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Click any quiz to view score statistics, student breakdown, or re-use questions
+                  </p>
+                </div>
               </div>
-              <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
-                Viewing: {currentClass?.name || 'Class'}
-              </span>
+
+              {/* Scope & Class Filter */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={quizScopeFilter}
+                  onChange={(e) => setQuizScopeFilter(e.target.value as 'all' | 'class')}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium bg-slate-50 text-slate-700 cursor-pointer"
+                >
+                  <option value="all">All School Quizzes ({quizzes.length})</option>
+                  <option value="class">{currentClass?.name || 'Class'} Quizzes Only</option>
+                </select>
+              </div>
             </div>
 
-            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-              {teacherQuizzes.map((quiz) => {
-                const targetCls = classes.find((c) => c.id === quiz.classId);
-                const resultsForQuiz = quizResults.filter((r) => r.quizId === quiz.id);
-                const pendingCountForQuiz = resultsForQuiz.filter((r) => r.status === 'pending_review').length;
-                const gradedResults = resultsForQuiz.filter((r) => r.status !== 'pending_review');
-                const avgScore =
-                  gradedResults.length > 0
-                    ? (
-                        gradedResults.reduce((acc, r) => acc + r.percentage, 0) /
-                        gradedResults.length
-                      ).toFixed(1)
-                    : 'N/A';
+            {/* Filter Tabs & Search Bar */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              {/* Status Chips */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setQuizFilterStatus('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    quizFilterStatus === 'all'
+                      ? 'bg-blue-900 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200'
+                  }`}
+                >
+                  All Quizzes ({displayQuizzes.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuizFilterStatus('ongoing')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    quizFilterStatus === 'ongoing'
+                      ? 'bg-emerald-700 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-emerald-50 border border-slate-200'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                  <span>Ongoing ({ongoingQuizzesCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuizFilterStatus('previous')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    quizFilterStatus === 'previous'
+                      ? 'bg-slate-800 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200'
+                  }`}
+                >
+                  Previous / Past Due ({previousQuizzesCount})
+                </button>
+              </div>
 
-                return (
-                  <div
-                    key={quiz.id}
-                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-slate-50 transition-colors space-y-2.5"
+              {/* Search Bar */}
+              <div className="relative md:w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search quizzes by title or subject..."
+                  value={quizSearchText}
+                  onChange={(e) => setQuizSearchText(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                />
+                {quizSearchText && (
+                  <button
+                    type="button"
+                    onClick={() => setQuizSearchText('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
-                            {quiz.subject}
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
-                            {targetCls?.name || 'Assigned Class'}
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                              quiz.markingMode === 'manual'
-                                ? 'bg-purple-100 text-purple-800 border-purple-200'
-                                : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                            }`}
-                          >
-                            {quiz.markingMode === 'manual' ? 'Teacher Review' : 'Auto Marked'}
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                            {quiz.maxAttempts ? `${quiz.maxAttempts} Attempt(s)` : '1 Attempt'}
-                          </span>
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Quizzes Cards List */}
+            <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
+              {displayQuizzes.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200 p-6 space-y-2">
+                  <p className="text-sm font-bold text-slate-700">No quizzes match this filter</p>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    Try switching filters, clearing your search query, or create a new quiz above.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuizFilterStatus('all');
+                      setQuizScopeFilter('all');
+                      setQuizSearchText('');
+                    }}
+                    className="mt-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-blue-900 hover:bg-blue-50 cursor-pointer"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              ) : (
+                displayQuizzes.map((quiz) => {
+                  const targetCls = classes.find((c) => c.id === quiz.classId);
+                  const resultsForQuiz = quizResults.filter((r) => r.quizId === quiz.id);
+                  const pendingCountForQuiz = resultsForQuiz.filter((r) => r.status === 'pending_review').length;
+                  const gradedResults = resultsForQuiz.filter((r) => r.status !== 'pending_review');
+                  const avgScore =
+                    gradedResults.length > 0
+                      ? (
+                          gradedResults.reduce((acc, r) => acc + r.percentage, 0) /
+                          gradedResults.length
+                        ).toFixed(1)
+                      : 'N/A';
+
+                  const isPast = new Date(quiz.dueDate).getTime() < new Date().setHours(0, 0, 0, 0);
+                  const totalQuizPoints = quiz.questions.reduce((sum, q) => sum + (q.points || 1), 0);
+
+                  return (
+                    <div
+                      key={quiz.id}
+                      className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 hover:shadow-xs transition-all space-y-3 group"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                              {quiz.subject}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                              {targetCls?.name || 'Assigned Class'}
+                            </span>
+                            {isPast ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                Previous / Past Due
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Ongoing
+                              </span>
+                            )}
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                quiz.markingMode === 'manual'
+                                  ? 'bg-purple-100 text-purple-800 border-purple-200'
+                                  : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                              }`}
+                            >
+                              {quiz.markingMode === 'manual' ? 'Teacher Review' : 'Auto Marked'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <h4
+                              onClick={() => setSelectedQuizForStats(quiz)}
+                              className="font-bold text-slate-900 text-sm group-hover:text-blue-900 cursor-pointer flex items-center gap-1.5"
+                              title="Click to view detailed statistics"
+                            >
+                              <span>{quiz.title}</span>
+                              <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </h4>
+                          </div>
                         </div>
-                        <h4 className="font-bold text-slate-900 text-sm">{quiz.title}</h4>
-                      </div>
 
-                      <button
-                        onClick={() => deleteQuiz(quiz.id)}
-                        className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 border border-transparent hover:border-red-200"
-                        title="Delete Quiz"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <p className="text-xs text-slate-600 line-clamp-2">{quiz.description}</p>
-
-                    {/* Pending Reviews Alert */}
-                    {pendingCountForQuiz > 0 && (
-                      <div className="p-2 rounded-lg bg-amber-100/80 border border-amber-300 text-xs text-amber-900 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 font-bold">
-                          <Clock className="w-3.5 h-3.5 text-amber-700 animate-spin" />
-                          <span>{pendingCountForQuiz} submission(s) awaiting your grading</span>
-                        </div>
                         <button
-                          type="button"
-                          onClick={() => setActiveTab('grading')}
-                          className="px-2.5 py-1 rounded bg-amber-700 hover:bg-amber-800 text-white font-bold text-[10px] shrink-0"
+                          onClick={() => deleteQuiz(quiz.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer"
+                          title="Delete Quiz"
                         >
-                          Grade Now →
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    )}
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 text-xs text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-                        {quiz.questions.length} Questions ({quiz.timeLimitMinutes} min auto-lock)
-                      </span>
-                      <span className="font-semibold text-blue-700">
-                        {resultsForQuiz.length} Submissions • Avg: {avgScore !== 'N/A' ? `${avgScore}%` : 'Pending'}
-                      </span>
+                      {quiz.description && (
+                        <p className="text-xs text-slate-600 line-clamp-2">{quiz.description}</p>
+                      )}
+
+                      {/* Pending Reviews Alert */}
+                      {pendingCountForQuiz > 0 && (
+                        <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            <span>{pendingCountForQuiz} student submission(s) awaiting your grading</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('grading')}
+                            className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] shrink-0 cursor-pointer"
+                          >
+                            Grade Now →
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Meta Stats and Action Controls Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
+                        <div className="flex items-center gap-3 text-slate-500 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
+                            {quiz.questions.length} Questions ({totalQuizPoints} pts)
+                          </span>
+                          <span>•</span>
+                          <span>{quiz.timeLimitMinutes} min lock</span>
+                          <span>•</span>
+                          <span className="font-semibold text-blue-800">
+                            {resultsForQuiz.length} Submissions
+                          </span>
+                          <span>•</span>
+                          <span className="font-bold text-slate-700">
+                            Avg: {avgScore !== 'N/A' ? `${avgScore}%` : 'Pending'}
+                          </span>
+                        </div>
+
+                        {/* Interactive Buttons: View Stats & Scores + Re-use Question Set */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleReuseQuiz(quiz, false)}
+                            className="px-2.5 py-1 rounded-lg border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-900 font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                            title="Clone questions from this quiz into the Quiz Creator"
+                          >
+                            <Copy className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Re-use Question Set</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedQuizForStats(quiz)}
+                            className="px-3 py-1 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                            title="Click to view full class statistics, student scores, and parent links"
+                          >
+                            <BarChart3 className="w-3.5 h-3.5 text-blue-200" />
+                            <span>View Stats & Scores</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -1916,7 +2259,18 @@ export const TeacherDashboard: React.FC = () => {
                   return (
                     <tr key={det.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {studentUser?.fullName}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedStudentForParentProfile(det.studentId);
+                            setParentProfileQuizContext(null);
+                          }}
+                          className="hover:text-blue-600 hover:underline flex items-center gap-1.5 cursor-pointer text-left font-bold"
+                          title="Click to view Parent Profile & contact notes"
+                        >
+                          <span>{studentUser?.fullName}</span>
+                          <Users className="w-3 h-3 text-slate-400" />
+                        </button>
                       </td>
                       <td className="py-3 px-4">
                         <span className="font-semibold text-slate-800">
@@ -1981,6 +2335,41 @@ export const TeacherDashboard: React.FC = () => {
         onClose={() => setIsBulkImportOpen(false)}
         onImportQuestions={handleImportFromMarkdown}
         defaultSubject={quizSubject}
+      />
+
+      {/* MODAL: Quiz Statistics, Scores Breakdown & Question Analysis */}
+      {selectedQuizForStats && (
+        <QuizStatisticsModal
+          isOpen={Boolean(selectedQuizForStats)}
+          quiz={selectedQuizForStats}
+          onClose={() => setSelectedQuizForStats(null)}
+          onReuseQuiz={(quiz, cloneSettings) => handleReuseQuiz(quiz, cloneSettings)}
+          onOpenParentProfile={(studentId, quizContext) => {
+            setSelectedStudentForParentProfile(studentId);
+            setParentProfileQuizContext(quizContext || null);
+          }}
+        />
+      )}
+
+      {/* MODAL: Parent Profile, Contact Card & Direct Behavioral Notes */}
+      {selectedStudentForParentProfile && (
+        <ParentProfileModal
+          isOpen={Boolean(selectedStudentForParentProfile)}
+          studentId={selectedStudentForParentProfile}
+          quizContext={parentProfileQuizContext || undefined}
+          onClose={() => {
+            setSelectedStudentForParentProfile(null);
+            setParentProfileQuizContext(null);
+          }}
+        />
+      )}
+
+      {/* MODAL: Re-use Question Set from Past Quizzes */}
+      <PreviousQuizPickerModal
+        isOpen={isPreviousQuizPickerOpen}
+        onClose={() => setIsPreviousQuizPickerOpen(false)}
+        onImportQuestions={handleImportQuestionsFromPicker}
+        currentSubject={quizSubject}
       />
     </div>
   );
