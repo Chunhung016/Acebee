@@ -18,8 +18,13 @@ import {
   BarChart2,
   Flame,
   Check,
+  Zap,
+  Clock,
+  Send,
+  History,
 } from 'lucide-react';
 import { Subject, QuizQuestion } from '../../types';
+import { WeaknessPracticeOverlay } from './WeaknessPracticeOverlay';
 
 interface TopicDiagnostic {
   topic: string;
@@ -41,12 +46,26 @@ interface TopicDiagnostic {
 }
 
 export const StudentWeakAreaDiagnostics: React.FC = () => {
-  const { currentUser, quizzes, quizResults, questionBank } = useApp();
+  const {
+    currentUser,
+    quizzes,
+    quizResults,
+    questionBank,
+    classes,
+    studentDetails,
+    weaknessPractices,
+    recordWeaknessPractice,
+  } = useApp();
 
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<'all' | 'critical' | 'developing' | 'mastered'>('all');
   const [expandedTopic, setExpandedTopic] = useState<string | null>(null);
   const [selectedPracticeTopic, setSelectedPracticeTopic] = useState<string | null>(null);
+  const [activePracticeSession, setActivePracticeSession] = useState<{ topic: string; subject: string } | null>(null);
+
+  // Student class resolution
+  const myDetail = studentDetails.find((d) => d.studentId === currentUser?.id);
+  const myClass = classes.find((c) => c.id === myDetail?.classId);
 
   // Filter student's released or completed results
   const myResults = useMemo(() => {
@@ -54,6 +73,11 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
       (r) => r.studentId === currentUser?.id && r.status !== 'in_progress'
     );
   }, [quizResults, currentUser?.id]);
+
+  // Practices logged for this student
+  const myPractices = useMemo(() => {
+    return weaknessPractices.filter((p) => p.studentId === currentUser?.id);
+  }, [weaknessPractices, currentUser?.id]);
 
   // Map of questionId -> question details from quizzes + question bank
   const questionMap = useMemo(() => {
@@ -221,6 +245,13 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
     return { criticalCount, developingCount, masteredCount, totalMissed };
   }, [diagnosticsData]);
 
+  // Top critical topic for instant recovery challenge
+  const criticalPriorityTopic = useMemo(() => {
+    const critical = diagnosticsData.find((d) => d.status === 'critical');
+    if (critical) return critical;
+    return diagnosticsData.find((d) => d.status === 'developing');
+  }, [diagnosticsData]);
+
   // Practice questions recommended from question bank for weak topics
   const recommendedPracticeQuestions = useMemo(() => {
     if (!selectedPracticeTopic) {
@@ -251,23 +282,31 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-blue-100 text-xs font-mono uppercase tracking-wider">
               <Brain className="w-3.5 h-3.5 text-blue-300" />
-              AI & Diagnostic Analytics Engine
+              Interactive Weakness Engine
             </div>
             <h2 className="text-xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] tracking-tight">
-              Weak Area Diagnostics & Smart Review
+              Weak Area Diagnostics & Interactive Drills
             </h2>
             <p className="text-xs text-blue-200 max-w-2xl leading-relaxed">
-              Analyzes every completed quiz item, error pattern, and subject topic to pinpoint your exact knowledge gaps and build tailored recovery recommendations.
+              Analyzes quizzes, pinpoints misconceptions, and offers 10-question smart recovery drills with instant feedback and sound effects. Practice actions are automatically shared with your teachers.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-blue-950/80 px-3.5 py-2 rounded-xl border border-blue-800 text-xs shrink-0">
-            <Sparkles className="w-4 h-4 text-blue-300 animate-pulse" />
-            <span>Updated live from {myResults.length} quiz assessments</span>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 relative z-10">
+            {myPractices.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-3 py-1.5 rounded-xl text-xs font-bold">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{myPractices.length} Drills Completed</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 bg-blue-950/80 px-3.5 py-1.5 rounded-xl border border-blue-800 text-xs shrink-0">
+              <Sparkles className="w-4 h-4 text-blue-300 animate-pulse" />
+              <span>{myResults.length} Assessments Analyzed</span>
+            </div>
           </div>
         </div>
 
-        {/* 3 Metric Cards */}
+        {/* 4 Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-white/10 relative z-10 text-xs">
           <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-xl border border-white/10">
             <div className="flex items-center justify-between">
@@ -310,10 +349,47 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
               <HelpCircle className="w-4 h-4 text-blue-300" />
             </div>
             <div className="text-2xl font-black text-white mt-1">{summaryStats.totalMissed} Items</div>
-            <p className="text-[11px] text-blue-200 mt-0.5">Logged with correct explanations</p>
+            <p className="text-[11px] text-blue-200 mt-0.5">Ready for 10-Q targeted drill</p>
           </div>
         </div>
       </div>
+
+      {/* HERO PRIORITY RECOVERY DRILL CARD */}
+      {criticalPriorityTopic && (
+        <div className="p-5 bg-gradient-to-r from-blue-900 via-indigo-900 to-indigo-950 rounded-2xl text-white shadow-lg border border-indigo-700/60 relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+          <div className="absolute right-0 top-0 w-96 h-full bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none" />
+          <div className="space-y-1.5 relative z-10">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/30 text-amber-200 text-[11px] font-bold uppercase tracking-wider">
+              <Flame className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+              #1 Recommended Recovery Target
+            </div>
+            <h3 className="text-lg font-black tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
+              Mastery Drill: {criticalPriorityTopic.topic}
+            </h3>
+            <p className="text-xs text-indigo-100 max-w-xl leading-relaxed">
+              Your current accuracy is{' '}
+              <strong className="text-amber-300 font-bold">{criticalPriorityTopic.accuracy}%</strong> with{' '}
+              {criticalPriorityTopic.missedQuestions.length} missed items. Launch an interactive 10-question drill with sound effects, drag & drop, and teacher notice!
+            </p>
+          </div>
+
+          <button
+            type="button"
+            id="start-priority-practice-drill-btn"
+            onClick={() =>
+              setActivePracticeSession({
+                topic: criticalPriorityTopic.topic,
+                subject: String(criticalPriorityTopic.subject),
+              })
+            }
+            className="relative z-10 px-5 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-extrabold text-xs shadow-md transition-all flex items-center gap-2.5 shrink-0 cursor-pointer"
+          >
+            <Zap className="w-4 h-4 text-slate-950 fill-slate-950" />
+            <span>Launch 10-Question Drill</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Filter and Switcher Controls */}
       <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -384,6 +460,14 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
         <div className="space-y-4">
           {filteredDiagnostics.map((diag) => {
             const isExpanded = expandedTopic === diag.topic;
+            const topicPractices = myPractices.filter(
+              (p) => p.topic.toLowerCase() === diag.topic.toLowerCase()
+            );
+            const bestPracticeScore =
+              topicPractices.length > 0
+                ? Math.max(...topicPractices.map((p) => p.scorePercentage))
+                : null;
+
             return (
               <div
                 key={diag.topic}
@@ -420,6 +504,13 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
                       <span className="text-xs text-slate-500 font-medium">
                         {diag.totalAttempts} total attempts ({diag.missedQuestions.length} missed)
                       </span>
+
+                      {topicPractices.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Drilled {topicPractices.length}x (Best: {bestPracticeScore}%)
+                        </span>
+                      )}
                     </div>
 
                     <h3 className="text-base font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
@@ -476,24 +567,30 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setSelectedPracticeTopic(diag.topic)}
-                        className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                        onClick={() =>
+                          setActivePracticeSession({
+                            topic: diag.topic,
+                            subject: String(diag.subject),
+                          })
+                        }
+                        className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        title="Open interactive 10-question practice drill"
                       >
-                        <BookOpen className="w-3.5 h-3.5" />
-                        <span>Practice</span>
+                        <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                        <span>Practice (10 Qs)</span>
                       </button>
 
                       {diag.missedQuestions.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setExpandedTopic(isExpanded ? null : diag.topic)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+                          className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors"
                           title="Inspect mistakes"
                         >
                           {isExpanded ? (
-                            <ChevronUp className="w-5 h-5 text-slate-700" />
+                            <ChevronUp className="w-4 h-4 text-slate-700" />
                           ) : (
-                            <ChevronDown className="w-5 h-5 text-slate-700" />
+                            <ChevronDown className="w-4 h-4 text-slate-700" />
                           )}
                         </button>
                       )}
@@ -662,6 +759,102 @@ export const StudentWeakAreaDiagnostics: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* COMPLETED WEAKNESS DRILLS & TEACHER SYNC LOG */}
+      {myPractices.length > 0 && (
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700">
+                <History className="w-4 h-4 text-indigo-600" />
+                Targeted Practice Activity & Teacher Sync
+              </div>
+              <h3 className="text-base font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] mt-0.5">
+                Your Completed Weakness Drills ({myPractices.length})
+              </h3>
+              <p className="text-xs text-slate-500">
+                Every practice drill is registered and shared with your teachers to demonstrate proactive revision.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {myPractices.slice(0, 6).map((prac) => (
+              <div
+                key={prac.id}
+                className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                      {prac.subject}
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      {new Date(prac.completedAt).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-900 mt-1.5 line-clamp-1">
+                    {prac.topic}
+                  </h4>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-slate-200/60">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-600 font-medium">Score:</span>
+                    <span
+                      className={`font-black ${
+                        prac.scorePercentage >= 80
+                          ? 'text-emerald-600'
+                          : prac.scorePercentage >= 60
+                          ? 'text-amber-600'
+                          : 'text-rose-600'
+                      }`}
+                    >
+                      {prac.score}/{prac.totalQuestions} ({prac.scorePercentage}%)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">Homeroom Notice:</span>
+                    {prac.teacherNoticed ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-700 font-bold">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Teacher Reviewed
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-blue-700 font-semibold">
+                        <Send className="w-3 h-3 text-blue-500" />
+                        Synced to Teacher
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* POP OUT & OVERLAY 10-QUESTION PRACTICE DRILL */}
+      {activePracticeSession && (
+        <WeaknessPracticeOverlay
+          topic={activePracticeSession.topic}
+          subject={activePracticeSession.subject}
+          questionBank={questionBank}
+          quizzes={quizzes}
+          studentId={currentUser?.id || 'demo-student'}
+          studentName={currentUser?.fullName || 'Student'}
+          classId={myClass?.id}
+          className={myClass?.name}
+          onClose={() => setActivePracticeSession(null)}
+          onRecordCompleted={async (record) => {
+            await recordWeaknessPractice(record);
+          }}
+        />
+      )}
     </div>
   );
 };

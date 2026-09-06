@@ -74,7 +74,7 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
   const [justSubmittedResult, setJustSubmittedResult] = useState<QuizResult | null>(null);
 
   // Audio mute state
-  const [isMuted, setIsMuted] = useState<boolean>(soundEffects.isMuted());
+  const [isMuted, setIsMuted] = useState<boolean>(soundEffects.isMuted);
   // Recent feedback trigger indicator
   const [recentlyAnsweredId, setRecentlyAnsweredId] = useState<string | null>(null);
 

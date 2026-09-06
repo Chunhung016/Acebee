@@ -1,4 +1,4 @@
-import { User, SchoolClass, StudentDetail, Quiz, QuizResult, TeacherComment, Announcement, SchoolInfo, QuestionBankItem, ParentAlert } from '../types';
+import { User, SchoolClass, StudentDetail, Quiz, QuizResult, TeacherComment, Announcement, SchoolInfo, QuestionBankItem, ParentAlert, WeaknessPracticeRecord } from '../types';
 
 export const INITIAL_SCHOOL_INFO: SchoolInfo = {
   name: 'ACEBEE Academy',
@@ -216,6 +216,45 @@ export const INITIAL_PARENT_ALERTS: ParentAlert[] = [
     messageText: '📢 ACEBEE Academy: Lucas Vance has scored 18/20 (90%) in Fractions & Ratios Mastery Quiz. Teacher Feedback: "Outstanding analytical reasoning and flawless simplification of fractional operations."',
     status: 'sent',
     sentAt: now,
+  },
+];
+
+export const INITIAL_WEAKNESS_PRACTICES: WeaknessPracticeRecord[] = [
+  {
+    id: 'practice-rec-1',
+    studentId: 'user-student-1',
+    studentName: 'Lucas Vance',
+    classId: 'class-year-5',
+    className: 'Year 5',
+    topic: 'Fractions & Operations',
+    subject: 'Mathematics',
+    totalQuestions: 10,
+    correctAnswers: 9,
+    scorePercentage: 90,
+    timeSpentSeconds: 240,
+    completedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+    xpEarned: 180,
+    teacherNoticed: false,
+    answersSummary: [
+      {
+        questionId: 'q-demo-1',
+        questionText: 'Evaluate the expression 3/8 + 2/5 and express as a single fraction.',
+        questionType: 'mcq',
+        selectedAnswer: '31/40',
+        correctAnswer: '31/40',
+        isCorrect: true,
+        explanation: 'Common denominator is 40. 15/40 + 16/40 = 31/40.',
+      },
+      {
+        questionId: 'q-demo-2',
+        questionText: 'Simplify 12/36 to its lowest terms.',
+        questionType: 'mcq',
+        selectedAnswer: '1/3',
+        correctAnswer: '1/3',
+        isCorrect: true,
+        explanation: 'Divide numerator and denominator by GCD 12 to get 1/3.',
+      },
+    ],
   },
 ];
 

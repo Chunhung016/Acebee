@@ -9,6 +9,7 @@ import { QuestionBankPickerModal } from '../questions/QuestionBankPickerModal';
 import { MarkdownBulkImportModal } from '../questions/MarkdownBulkImportModal';
 import { TeacherGradingView } from './TeacherGradingView';
 import { ParentAlertsView } from '../alerts/ParentAlertsView';
+import { TeacherRemediationView } from './TeacherRemediationView';
 import {
   BookOpen,
   Users,
@@ -41,6 +42,7 @@ import {
   X,
   Image as ImageIcon,
   Upload,
+  Zap,
 } from 'lucide-react';
 
 export const TeacherDashboard: React.FC = () => {
@@ -54,6 +56,7 @@ export const TeacherDashboard: React.FC = () => {
     teacherComments,
     questionBank,
     parentAlerts,
+    weaknessPractices,
     createQuiz,
     deleteQuiz,
     updateStudentDetail,
@@ -62,7 +65,7 @@ export const TeacherDashboard: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts'
+    'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts' | 'remediation'
   >('roster');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -440,6 +443,16 @@ export const TeacherDashboard: React.FC = () => {
     }).length;
   }, [quizResults, quizzes, currentUser, teacherClassIds]);
 
+  // Class weakness practices count
+  const { classPracticesCount, unnoticedPracticeCount } = useMemo(() => {
+    const classStudentIds = new Set(assignedStudentDetails.map((d) => d.studentId));
+    const list = weaknessPractices.filter(
+      (p) => classStudentIds.has(p.studentId) || (p.classId && p.classId === currentClass?.id)
+    );
+    const unnoticed = list.filter((p) => !p.teacherNoticed).length;
+    return { classPracticesCount: list.length, unnoticedPracticeCount: unnoticed };
+  }, [weaknessPractices, assignedStudentDetails, currentClass]);
+
   const getCategoryColor = (cat: CommentCategory) => {
     switch (cat) {
       case 'positive':
@@ -454,7 +467,7 @@ export const TeacherDashboard: React.FC = () => {
   };
 
   interface TeacherNavItem {
-    id: 'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts';
+    id: 'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts' | 'remediation';
     label: string;
     icon: React.ElementType;
     count?: number;
@@ -466,6 +479,7 @@ export const TeacherDashboard: React.FC = () => {
     { id: 'quizzes', label: `Quizzes & Creator (${teacherQuizzes.length})`, icon: Award },
     { id: 'questions', label: `Question Bank (${questionBank.length})`, icon: Database },
     { id: 'grading', label: 'Manual Grading & Reviews', icon: FileCheck, count: pendingReviewCount > 0 ? pendingReviewCount : undefined, highlight: pendingReviewCount > 0 },
+    { id: 'remediation', label: 'Student Weakness Drills', icon: Zap, count: unnoticedPracticeCount > 0 ? unnoticedPracticeCount : (classPracticesCount > 0 ? classPracticesCount : undefined), highlight: unnoticedPracticeCount > 0 },
     { id: 'behavior', label: 'Parent Behavioral Notes', icon: MessageSquare },
     { id: 'gradebook', label: 'Gradebook & Submissions', icon: Award },
     { id: 'alerts', label: `Parent Alerts (${parentAlerts.length})`, icon: MessageCircle },
@@ -683,6 +697,20 @@ export const TeacherDashboard: React.FC = () => {
                           <span className="text-xs text-slate-500 font-mono">
                             {studentUser?.email}
                           </span>
+                          {(() => {
+                            const count = weaknessPractices.filter((p) => p.studentId === det.studentId).length;
+                            if (count === 0) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('remediation')}
+                                className="mt-1 flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                              >
+                                <Zap className="w-3 h-3 text-amber-600 fill-amber-600" />
+                                <span>{count} Weakness Drills Logged</span>
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -1931,6 +1959,9 @@ export const TeacherDashboard: React.FC = () => {
 
       {/* TAB 6: MANUAL GRADING & REVIEWS */}
       {activeTab === 'grading' && <TeacherGradingView currentClass={currentClass} />}
+
+      {/* TAB: STUDENT ERROR WEAKNESS DRILLS & REMEDIATION */}
+      {activeTab === 'remediation' && <TeacherRemediationView currentClass={currentClass} />}
 
       {/* TAB 7: PARENT ALERTS & DISPATCHES */}
       {activeTab === 'alerts' && <ParentAlertsView teacherClassId={currentClass?.id} />}

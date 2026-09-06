@@ -22,6 +22,7 @@ import {
   Announcement,
   SchoolInfo,
   QuestionBankItem,
+  WeaknessPracticeRecord,
 } from '../types';
 
 export interface FirestoreDataSnapshot {
@@ -34,6 +35,7 @@ export interface FirestoreDataSnapshot {
   announcements: Announcement[];
   schoolInfo: SchoolInfo | null;
   questionBank: QuestionBankItem[];
+  weaknessPractices: WeaknessPracticeRecord[];
 }
 
 // Deep recursive sanitizer to remove undefined values at all levels before saving to Firestore
@@ -72,6 +74,7 @@ export const firestoreService = {
       announcements: [],
       schoolInfo: null,
       questionBank: [],
+      weaknessPractices: [],
     };
 
     // Emit updates immediately for real-time reactivity
@@ -193,6 +196,18 @@ export const firestoreService = {
       )
     );
 
+    // 10. Weakness Practice Drills
+    unsubscribes.push(
+      onSnapshot(
+        collection(db, 'weakness_practices'),
+        (snapshot) => {
+          state.weaknessPractices = snapshot.docs.map((d) => d.data() as WeaknessPracticeRecord);
+          emit('weakness_practices');
+        },
+        (err) => console.warn('Firestore weakness_practices subscription notice:', err)
+      )
+    );
+
     return () => {
       unsubscribes.forEach((unsub) => unsub());
     };
@@ -210,6 +225,7 @@ export const firestoreService = {
       announcementsSnap,
       schoolInfoSnap,
       questionBankSnap,
+      weaknessPracticesSnap,
     ] = await Promise.all([
       getDocs(collection(db, 'users')),
       getDocs(collection(db, 'classes')),
@@ -220,6 +236,7 @@ export const firestoreService = {
       getDocs(collection(db, 'announcements')),
       getDoc(doc(db, 'school_info', 'main')),
       getDocs(collection(db, 'question_bank')),
+      getDocs(collection(db, 'weakness_practices')),
     ]);
 
     return {
@@ -232,6 +249,7 @@ export const firestoreService = {
       announcements: announcementsSnap.docs.map((d) => d.data() as Announcement),
       schoolInfo: schoolInfoSnap.exists() ? (schoolInfoSnap.data() as SchoolInfo) : null,
       questionBank: questionBankSnap.docs.map((d) => d.data() as QuestionBankItem),
+      weaknessPractices: weaknessPracticesSnap.docs.map((d) => d.data() as WeaknessPracticeRecord),
     };
   },
 
@@ -518,5 +536,24 @@ export const firestoreService = {
   async saveSchoolInfo(info: SchoolInfo): Promise<void> {
     const ref = doc(db, 'school_info', 'main');
     await setDoc(ref, cleanDataForFirestore(info), { merge: true });
+  },
+
+  async saveWeaknessPractice(record: WeaknessPracticeRecord): Promise<void> {
+    try {
+      const ref = doc(db, 'weakness_practices', record.id);
+      await setDoc(ref, cleanDataForFirestore(record), { merge: true });
+    } catch (error) {
+      console.error(`Firestore error saving weakness practice ${record.id}:`, error);
+      throw error;
+    }
+  },
+
+  async deleteWeaknessPractice(id: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'weakness_practices', id));
+    } catch (error) {
+      console.error(`Firestore error deleting weakness practice ${id}:`, error);
+      throw error;
+    }
   },
 };

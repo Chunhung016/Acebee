@@ -16,6 +16,7 @@ import {
   QuizAnswerRecord,
   QuizResultStatus,
   ParentAlert,
+  WeaknessPracticeRecord,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -28,6 +29,7 @@ import {
   INITIAL_SCHOOL_INFO,
   INITIAL_QUESTION_BANK,
   INITIAL_PARENT_ALERTS,
+  INITIAL_WEAKNESS_PRACTICES,
 } from '../data/initialData';
 import { generateUsername, generatePassword } from '../utils/credentialGenerator';
 import { testConnection } from '../lib/firebase';
@@ -91,6 +93,7 @@ interface AppContextType {
   teacherComments: TeacherComment[];
   questionBank: QuestionBankItem[];
   parentAlerts: ParentAlert[];
+  weaknessPractices: WeaknessPracticeRecord[];
   currentView: 'public' | 'dashboard';
   isLoginModalOpen: boolean;
   selectedQuizForTaking: Quiz | null;
@@ -159,6 +162,8 @@ interface AppContextType {
     totalPoints: number,
     options?: { attemptNumber?: number; status?: QuizResultStatus; releasedToStudent?: boolean; classId?: string }
   ) => Promise<QuizResult | void>;
+  recordWeaknessPractice: (record: WeaknessPracticeRecord) => Promise<void>;
+  markWeaknessPracticeNoticed: (practiceId: string) => Promise<void>;
 
   // Parent Operations
   markCommentAsRead: (commentId: string) => void;
@@ -187,6 +192,7 @@ const STORAGE_KEYS = {
   TEACHER_COMMENTS: 'acebee_teacher_comments_v2',
   QUESTION_BANK: 'acebee_question_bank_v2',
   PARENT_ALERTS: 'acebee_parent_alerts_v2',
+  WEAKNESS_PRACTICES: 'acebee_weakness_practices_v2',
   CURRENT_USER: 'acebee_current_user_v2',
   SCHOOL_INFO: 'acebee_school_info_v2',
 };
@@ -344,6 +350,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_PARENT_ALERTS;
   });
 
+  const [weaknessPractices, setWeaknessPractices] = useState<WeaknessPracticeRecord[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.WEAKNESS_PRACTICES);
+    return saved ? JSON.parse(saved) : INITIAL_WEAKNESS_PRACTICES;
+  });
+
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     if (saved) {
@@ -490,6 +501,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!collectionName || collectionName === 'question_bank') {
         if (data.questionBank) {
           setQuestionBank(data.questionBank.map(sanitizeQuestionBankItem));
+        }
+      }
+      if (!collectionName || collectionName === 'weakness_practices') {
+        if (data.weaknessPractices && data.weaknessPractices.length > 0) {
+          setWeaknessPractices(data.weaknessPractices);
         }
       }
 
@@ -688,6 +704,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('localStorage quota warning for parentAlerts', e);
     }
   }, [parentAlerts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.WEAKNESS_PRACTICES, JSON.stringify(weaknessPractices));
+    } catch (e) {
+      console.warn('localStorage quota warning for weaknessPractices', e);
+    }
+  }, [weaknessPractices]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SCHOOL_INFO, JSON.stringify(schoolInfo));
@@ -1569,6 +1593,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newResult;
   };
 
+  const recordWeaknessPractice = async (record: WeaknessPracticeRecord) => {
+    setWeaknessPractices((prev) => {
+      const filtered = prev.filter((p) => p.id !== record.id);
+      const next = [record, ...filtered];
+      broadcastChange('weakness_practice_recorded', next);
+      return next;
+    });
+    try {
+      await firestoreService.saveWeaknessPractice(record);
+    } catch (err) {
+      console.warn('Could not save weakness practice to Firestore:', err);
+    }
+  };
+
+  const markWeaknessPracticeNoticed = async (practiceId: string) => {
+    setWeaknessPractices((prev) =>
+      prev.map((p) => (p.id === practiceId ? { ...p, teacherNoticed: true } : p))
+    );
+    const target = weaknessPractices.find((p) => p.id === practiceId);
+    if (target) {
+      try {
+        await firestoreService.saveWeaknessPractice({ ...target, teacherNoticed: true });
+      } catch (err) {
+        console.warn('Could not update weakness practice notice in Firestore:', err);
+      }
+    }
+  };
+
   // Parent Functions
   const markCommentAsRead = (commentId: string) => {
     setTeacherComments((prev) =>
@@ -1630,6 +1682,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       teacherComments,
       questionBank,
       parentAlerts,
+      weaknessPractices,
       currentView,
       isLoginModalOpen,
       selectedQuizForTaking,
@@ -1669,6 +1722,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       releaseQuizMarks,
       batchReleaseQuizMarks,
       submitQuizResult,
+      recordWeaknessPractice,
+      markWeaknessPracticeNoticed,
       markCommentAsRead,
       dismissParentAlert,
       updateParentAlertStatus,
@@ -1686,6 +1741,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       teacherComments,
       questionBank,
       parentAlerts,
+      weaknessPractices,
       currentView,
       isLoginModalOpen,
       selectedQuizForTaking,

@@ -48,6 +48,8 @@ export interface SchoolClass {
   createdAt: string;
 }
 
+export type Class = SchoolClass;
+
 export interface StudentDetail {
   id: string;
   studentId: string;
@@ -235,5 +237,33 @@ export interface ParentAlert {
   messageText: string;
   status: 'sent' | 'pending';
   sentAt: string;
+}
+
+export interface WeaknessPracticeAnswer {
+  questionId: string;
+  questionText: string;
+  questionType: string;
+  selectedAnswer: string;
+  correctAnswer: string;
+  isCorrect: boolean;
+  explanation?: string;
+}
+
+export interface WeaknessPracticeRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  classId?: string;
+  className?: string;
+  topic: string;
+  subject: string;
+  totalQuestions: number; // exactly 10 questions
+  correctAnswers: number;
+  scorePercentage: number;
+  timeSpentSeconds: number;
+  completedAt: string;
+  xpEarned: number;
+  answersSummary: WeaknessPracticeAnswer[];
+  teacherNoticed?: boolean;
 }
 
