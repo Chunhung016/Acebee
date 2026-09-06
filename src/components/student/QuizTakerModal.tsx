@@ -3,6 +3,10 @@ import confetti from 'canvas-confetti';
 import { Quiz, QuizQuestion, QuizResult, StudentAnswerRecord } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { MathText } from '../common/MathRenderer';
+import { soundEffects } from '../../utils/soundEffects';
+import { InteractiveMatchingQuestion } from './InteractiveMatchingQuestion';
+import { ShortStructureFeedback } from './ShortStructureFeedback';
+import { FillInBlankInteractive } from './FillInBlankInteractive';
 import {
   X,
   Clock,
@@ -21,6 +25,11 @@ import {
   Image as ImageIcon,
   Upload,
   Trash2,
+  Volume2,
+  VolumeX,
+  Flame,
+  Zap,
+  CheckCheck,
 } from 'lucide-react';
 
 interface QuizTakerModalProps {
@@ -64,6 +73,16 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [justSubmittedResult, setJustSubmittedResult] = useState<QuizResult | null>(null);
 
+  // Audio mute state
+  const [isMuted, setIsMuted] = useState<boolean>(soundEffects.isMuted());
+  // Recent feedback trigger indicator
+  const [recentlyAnsweredId, setRecentlyAnsweredId] = useState<string | null>(null);
+
+  const toggleSound = () => {
+    const nextMuted = soundEffects.toggleMute();
+    setIsMuted(nextMuted);
+  };
+
   // Active Questions with Option & Question Randomization Support
   const activeQuestions = useMemo(() => {
     let list = [...quiz.questions];
@@ -97,6 +116,22 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
     });
   }, [quiz.id, quiz.questions, quiz.shuffleQuestions, quiz.shuffleOptions, isReviewOnly, hasExceededAttempts]);
 
+  // Gamification stats
+  const answeredQuestionsCount = useMemo(() => {
+    return activeQuestions.filter((q) => {
+      if (!q.type || q.type === 'mcq') return mcqAnswers[q.id] !== undefined;
+      if (q.type === 'structure') return Boolean(textAnswers[q.id]?.trim() || studentAttachments[q.id]?.trim());
+      if (q.type === 'fill_in_blank') return Boolean(textAnswers[q.id]?.trim());
+      if (q.type === 'matching') {
+        const matches = matchingAnswers[q.id] || {};
+        return Object.keys(matches).length > 0;
+      }
+      return false;
+    }).length;
+  }, [activeQuestions, mcqAnswers, textAnswers, studentAttachments, matchingAnswers]);
+
+  const progressPercent = Math.round((answeredQuestionsCount / (activeQuestions.length || 1)) * 100);
+
   // Timer countdown
   useEffect(() => {
     if (isSubmitted || isReviewOnly || hasExceededAttempts) return;
@@ -117,6 +152,50 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
   }, [isSubmitted, isReviewOnly, hasExceededAttempts]);
 
   const currentQ = activeQuestions[currentQuestionIndex];
+
+  // Keyboard shortcut listener for swift, gamified answering
+  useEffect(() => {
+    if (isSubmitted || isReviewOnly || hasExceededAttempts || !currentQ) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      if (!currentQ.type || currentQ.type === 'mcq') {
+        const key = e.key.toUpperCase();
+        const options = currentQ.displayOptions || currentQ.options || [];
+        const letterIdx = ['A', 'B', 'C', 'D', 'E', 'F'].indexOf(key);
+        const numberIdx = ['1', '2', '3', '4', '5', '6'].indexOf(e.key);
+        const selectedIdx = letterIdx >= 0 ? letterIdx : numberIdx;
+
+        if (selectedIdx >= 0 && selectedIdx < options.length) {
+          e.preventDefault();
+          handleSelectMcq(selectedIdx);
+        }
+      }
+
+      if (e.key === 'ArrowRight' && currentQuestionIndex < activeQuestions.length - 1) {
+        setCurrentQuestionIndex((prev) => prev + 1);
+        soundEffects.playPop(480);
+      } else if (e.key === 'ArrowLeft' && currentQuestionIndex > 0) {
+        setCurrentQuestionIndex((prev) => prev - 1);
+        soundEffects.playPop(420);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentQ, currentQuestionIndex, activeQuestions.length, isSubmitted, isReviewOnly, hasExceededAttempts]);
+
+  const handleSelectMcq = (idx: number) => {
+    if (!currentQ) return;
+    setMcqAnswers((prev) => ({ ...prev, [currentQ.id]: idx }));
+    soundEffects.playOptionSelect(idx);
+    setRecentlyAnsweredId(currentQ.id);
+    setTimeout(() => {
+      setRecentlyAnsweredId(null);
+    }, 1200);
+  };
 
   // Helper for counting words in essay
   const countWords = (str: string) => {
@@ -239,14 +318,13 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
     await submitQuizResult(quiz.id, answerRecords, calculatedScore, totalPoints);
     setJustSubmittedResult(newResult);
     setIsSubmitted(true);
+    soundEffects.playCelebrationFanfare();
 
-    if (!isManual && percentage >= 75) {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
-    }
+    confetti({
+      particleCount: !isManual && percentage >= 75 ? 120 : 60,
+      spread: 80,
+      origin: { y: 0.6 },
+    });
   };
 
   const formatTime = (seconds: number) => {
@@ -289,7 +367,27 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
             </h3>
           </div>
 
-          <div className="flex items-center gap-3 relative z-10">
+          <div className="flex items-center gap-2.5 relative z-10">
+            {/* Audio Feedback Mute / Unmute Toggle */}
+            <button
+              type="button"
+              onClick={toggleSound}
+              title={isMuted ? 'Enable Sound Effects' : 'Mute Sound Effects'}
+              className="p-2 rounded-lg text-blue-200 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-white/15"
+            >
+              {isMuted ? (
+                <>
+                  <VolumeX className="w-4 h-4 text-slate-300" />
+                  <span className="text-[10px] hidden sm:inline">Muted</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-4 h-4 text-amber-300 animate-pulse" />
+                  <span className="text-[10px] text-amber-200 hidden sm:inline">Sound ON</span>
+                </>
+              )}
+            </button>
+
             {!isSubmitted && !isReviewOnly && (
               <div
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-bold ${
@@ -305,12 +403,52 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-blue-200 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg text-blue-200 hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        {/* Gamified Live Progress, XP, & Streak Banner */}
+        {!hasExceededAttempts && !isSubmitted && (
+          <div className="bg-slate-50/95 px-5 py-2.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2 text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-slate-700 flex items-center gap-1">
+                <CheckCheck className="w-4 h-4 text-blue-600" />
+                <span>
+                  {answeredQuestionsCount} of {activeQuestions.length} answered
+                </span>
+              </span>
+
+              <span className="text-slate-300">•</span>
+
+              <span className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80 shadow-2xs">
+                <Zap className="w-3.5 h-3.5 text-emerald-600 fill-emerald-500" />
+                <span>+{answeredQuestionsCount * 10} XP</span>
+              </span>
+
+              {answeredQuestionsCount >= 2 && (
+                <span className="text-amber-800 font-bold flex items-center gap-1 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200/80 shadow-2xs animate-in zoom-in-75">
+                  <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>{answeredQuestionsCount}x Streak!</span>
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-1 max-w-[220px]">
+              <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden shadow-inner">
+                <div
+                  className="bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <span className="font-mono text-[11px] font-bold text-slate-600 w-9 text-right shrink-0">
+                {progressPercent}%
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
@@ -434,216 +572,110 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
 
               {/* 1. MCQ OPTIONS */}
               {(!currentQ.type || currentQ.type === 'mcq') && (
-                <div className="space-y-2.5">
-                  {(currentQ.displayOptions || currentQ.options)?.map((option, idx) => {
-                    const isSelected = mcqAnswers[currentQ.id] === idx;
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() =>
-                          setMcqAnswers((prev) => ({ ...prev, [currentQ.id]: idx }))
-                        }
-                        className={`w-full text-left p-3.5 rounded-xl border text-xs sm:text-sm font-medium transition-all flex items-center justify-between ${
-                          isSelected
-                            ? 'border-blue-600 bg-blue-50/80 text-blue-950 shadow-xs ring-1 ring-blue-600'
-                            : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                              isSelected ? 'bg-blue-900 text-white' : 'bg-slate-200 text-slate-600'
-                            }`}
-                          >
-                            {String.fromCharCode(65 + idx)}
-                          </span>
-                          <span className="leading-relaxed">
-                            <MathText text={option} />
-                          </span>
-                        </div>
-                        {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
-                      </button>
-                    );
-                  })}
+                <div className="space-y-3" id="mcq-options-container">
+                  <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                    <span className="font-medium flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                      Select the best option (or press keys A, B, C, D on keyboard):
+                    </span>
+                    {mcqAnswers[currentQ.id] !== undefined && (
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1 animate-in zoom-in-75">
+                        <Check className="w-3 h-3 stroke-[3]" /> Answer Locked
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {(currentQ.displayOptions || currentQ.options)?.map((option, idx) => {
+                      const isSelected = mcqAnswers[currentQ.id] === idx;
+                      const optionLetter = String.fromCharCode(65 + idx);
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectMcq(idx)}
+                          className={`group w-full text-left p-3.5 sm:p-4 rounded-xl border-2 transition-all transform active:scale-[0.98] flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'border-blue-600 bg-gradient-to-r from-blue-50/90 to-indigo-50/70 text-blue-950 shadow-sm ring-2 ring-blue-500/20 scale-[1.01]'
+                              : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50/80 text-slate-700 hover:shadow-2xs'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3.5 flex-1 pr-2">
+                            <span
+                              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition-transform group-hover:scale-105 ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-300'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}
+                            >
+                              {optionLetter}
+                            </span>
+                            <span className="leading-relaxed font-semibold text-xs sm:text-sm">
+                              <MathText text={option} />
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isSelected ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-100/90 px-2.5 py-1 rounded-full animate-in zoom-in-75">
+                                <Check className="w-3.5 h-3.5 stroke-[3]" /> Selected ✨
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-300 font-mono hidden sm:inline group-hover:text-slate-400">
+                                [{optionLetter}]
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
               {/* 2. STRUCTURED QUESTION (ESSAY / EXPLANATION) */}
               {currentQ.type === 'structure' && (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span className="flex items-center gap-1 font-semibold text-purple-900">
-                      <FileText className="w-3.5 h-3.5 text-purple-600" />
-                      Written response (Reviewed by Teacher)
-                    </span>
-                    <span>
-                      Words:{' '}
-                      <strong className="text-slate-800">
-                        {countWords(textAnswers[currentQ.id] || '')}
-                      </strong>
-                      {currentQ.wordLimit ? ` / ${currentQ.wordLimit} max` : ''}
-                    </span>
-                  </div>
-
-                  <textarea
-                    rows={6}
-                    value={textAnswers[currentQ.id] || ''}
-                    onChange={(e) =>
-                      setTextAnswers((prev) => ({ ...prev, [currentQ.id]: e.target.value }))
-                    }
-                    placeholder="Type your structured answer here in complete sentences. Detail your reasoning, calculations, or steps..."
-                    className="w-full p-3.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
-                  />
-
-                  {/* Student Hand-written Image Upload Option */}
-                  <div className="mt-3 p-3.5 bg-purple-50/40 rounded-xl border border-purple-100/80 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
-                        <ImageIcon className="w-4 h-4 text-purple-600" />
-                        Submit Written Work Photo (Optional)
-                      </span>
-                      {studentAttachments[currentQ.id] && (
-                        <button
-                          type="button"
-                          onClick={() => setStudentAttachments((prev) => ({ ...prev, [currentQ.id]: '' }))}
-                          className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3 h-3" /> Clear Image
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Write calculations, math formulas, or essays on paper? Click below to snap a photo or upload it so your teacher can see and mark your work.
-                    </p>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input
-                        type="file"
-                        id={`student-upload-${currentQ.id}`}
-                        className="hidden"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const r = new FileReader();
-                            r.onloadend = () => {
-                              setStudentAttachments((prev) => ({ ...prev, [currentQ.id]: r.result as string }));
-                            };
-                            r.readAsDataURL(file);
-                          }
-                        }}
-                      />
-                      <label
-                        htmlFor={`student-upload-${currentQ.id}`}
-                        className="flex items-center gap-2 py-2 px-3.5 bg-white border border-purple-200 hover:border-purple-400 hover:bg-purple-100 text-purple-950 text-xs font-bold rounded-lg cursor-pointer transition-all shadow-xs"
-                      >
-                        <Upload className="w-3.5 h-3.5 text-purple-700" />
-                        Upload Written Work
-                      </label>
-
-                      <input
-                        type="text"
-                        value={studentAttachments[currentQ.id]?.startsWith('data:') ? '' : (studentAttachments[currentQ.id] || '')}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setStudentAttachments((prev) => ({ ...prev, [currentQ.id]: val }));
-                        }}
-                        placeholder="Or paste photo URL..."
-                        className="flex-1 min-w-[150px] text-xs p-1.5 rounded-lg border border-purple-200 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                      />
-                    </div>
-
-                    {studentAttachments[currentQ.id] && (
-                      <div className="mt-2.5 relative rounded-lg overflow-hidden border border-purple-200 max-h-[160px] flex items-center justify-center bg-white p-1">
-                        <img
-                          src={studentAttachments[currentQ.id]}
-                          alt="Student Handwritten Attachment"
-                          className="max-h-[150px] object-contain rounded-md"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <p className="text-[11px] text-slate-400">
-                    💡 Tip: Teacher will evaluate your answer against the rubric guidelines and award full or partial credit.
-                  </p>
-                </div>
+                <ShortStructureFeedback
+                  questionId={currentQ.id}
+                  value={textAnswers[currentQ.id] || ''}
+                  wordLimit={currentQ.wordLimit || 120}
+                  attachmentUrl={studentAttachments[currentQ.id] || ''}
+                  onChangeText={(txt) =>
+                    setTextAnswers((prev) => ({ ...prev, [currentQ.id]: txt }))
+                  }
+                  onChangeAttachment={(url) =>
+                    setStudentAttachments((prev) => ({ ...prev, [currentQ.id]: url }))
+                  }
+                />
               )}
 
               {/* 3. FILL IN THE BLANK */}
               {currentQ.type === 'fill_in_blank' && (
-                <div className="space-y-3">
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Enter the missing term or answer:
-                  </label>
-                  <input
-                    type="text"
-                    value={textAnswers[currentQ.id] || ''}
-                    onChange={(e) =>
-                      setTextAnswers((prev) => ({ ...prev, [currentQ.id]: e.target.value }))
-                    }
-                    placeholder="Type missing word or phrase..."
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  />
-                  <p className="text-[11px] text-slate-400">
-                    {currentQ.caseSensitive ? 'Note: Answer is case sensitive.' : 'Case insensitive.'}
-                  </p>
-                </div>
+                <FillInBlankInteractive
+                  questionId={currentQ.id}
+                  questionText={currentQ.question}
+                  value={textAnswers[currentQ.id] || ''}
+                  caseSensitive={currentQ.caseSensitive || false}
+                  onChange={(val) =>
+                    setTextAnswers((prev) => ({ ...prev, [currentQ.id]: val }))
+                  }
+                />
               )}
 
-              {/* 4. MATCHING QUESTION */}
+              {/* 4. MATCHING QUESTION (DRAG AND DROP / TAP TO PAIR) */}
               {currentQ.type === 'matching' && (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-500 font-medium">
-                    Pair each item on the left with its corresponding match on the right:
-                  </p>
-
-                  <div className="space-y-2.5">
-                    {currentQ.matchingPairs?.map((pair, pIdx) => {
-                      const userRight = matchingAnswers[currentQ.id]?.[pair.left] || '';
-                      return (
-                        <div
-                          key={pIdx}
-                          className="p-3 rounded-xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                        >
-                          <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[11px] flex items-center justify-center shrink-0">
-                              {pIdx + 1}
-                            </span>
-                            <span><MathText text={pair.left} /></span>
-                          </div>
-
-                          <div className="flex items-center gap-2 sm:w-1/2">
-                            <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <select
-                              value={userRight}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setMatchingAnswers((prev) => ({
-                                  ...prev,
-                                  [currentQ.id]: {
-                                    ...(prev[currentQ.id] || {}),
-                                    [pair.left]: val,
-                                  },
-                                }));
-                              }}
-                              className="w-full text-xs font-medium py-2 px-3 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600"
-                            >
-                              <option value="">-- Select Match --</option>
-                              {currentQ.matchingPairs?.map((optPair, oIdx) => (
-                                <option key={oIdx} value={optPair.right}>
-                                  {optPair.right}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                <InteractiveMatchingQuestion
+                  questionId={currentQ.id}
+                  pairs={currentQ.matchingPairs || []}
+                  currentMatches={matchingAnswers[currentQ.id] || {}}
+                  onChange={(updatedMatches) =>
+                    setMatchingAnswers((prev) => ({
+                      ...prev,
+                      [currentQ.id]: updatedMatches,
+                    }))
+                  }
+                />
               )}
             </div>
           )}
@@ -803,15 +835,19 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
               <button
                 type="button"
                 disabled={currentQuestionIndex === 0}
-                onClick={() => setCurrentQuestionIndex((prev) => prev - 1)}
-                className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 disabled:opacity-40 flex items-center gap-1"
+                onClick={() => {
+                  setCurrentQuestionIndex((prev) => prev - 1);
+                  soundEffects.playPop(420);
+                }}
+                className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 disabled:opacity-40 flex items-center gap-1 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Previous</span>
               </button>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto px-2">
-                {quiz.questions.map((q, i) => {
+              {/* Numbered Question Badges with Answered/Active State */}
+              <div className="flex items-center gap-1.5 overflow-x-auto px-2 max-w-[50%]">
+                {activeQuestions.map((q, i) => {
                   const hasAnswer =
                     (!q.type || q.type === 'mcq')
                       ? mcqAnswers[q.id] !== undefined
@@ -821,28 +857,39 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                       ? Boolean(textAnswers[q.id]?.trim())
                       : Object.keys(matchingAnswers[q.id] || {}).length > 0;
 
+                  const isCurrent = currentQuestionIndex === i;
+
                   return (
-                    <span
+                    <button
                       key={i}
-                      onClick={() => setCurrentQuestionIndex(i)}
-                      className={`w-3 h-3 rounded-full cursor-pointer transition-all ${
-                        currentQuestionIndex === i
-                          ? 'bg-blue-600 ring-2 ring-blue-300 scale-110'
+                      type="button"
+                      onClick={() => {
+                        setCurrentQuestionIndex(i);
+                        soundEffects.playPop(520);
+                      }}
+                      className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg text-[10px] sm:text-xs font-bold shrink-0 transition-all flex items-center justify-center cursor-pointer ${
+                        isCurrent
+                          ? 'bg-blue-600 text-white ring-2 ring-blue-300 scale-110 shadow-xs'
                           : hasAnswer
-                          ? 'bg-blue-900'
-                          : 'bg-slate-300'
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                          : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
                       }`}
-                      title={`Question ${i + 1}`}
-                    />
+                      title={`Question ${i + 1}${hasAnswer ? ' (Answered)' : ''}`}
+                    >
+                      {i + 1}
+                    </button>
                   );
                 })}
               </div>
 
-              {currentQuestionIndex < quiz.questions.length - 1 ? (
+              {currentQuestionIndex < activeQuestions.length - 1 ? (
                 <button
                   type="button"
-                  onClick={() => setCurrentQuestionIndex((prev) => prev + 1)}
-                  className="px-4 py-2 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-semibold text-xs flex items-center gap-1 shadow-xs"
+                  onClick={() => {
+                    setCurrentQuestionIndex((prev) => prev + 1);
+                    soundEffects.playPop(480);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-semibold text-xs flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition-all"
                 >
                   <span>Next</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -851,9 +898,13 @@ export const QuizTakerModal: React.FC<QuizTakerModalProps> = ({ quiz, onClose })
                 <button
                   type="button"
                   onClick={() => handleSubmitQuiz(false)}
-                  className="px-5 py-2 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs"
+                  className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95 ${
+                    answeredQuestionsCount === activeQuestions.length
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 ring-2 ring-emerald-300 animate-pulse'
+                      : 'bg-blue-900 hover:bg-blue-800'
+                  }`}
                 >
-                  <CheckCircle2 className="w-4 h-4 text-blue-200" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-200" />
                   <span>Submit Assessment</span>
                 </button>
               )}
