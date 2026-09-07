@@ -9,6 +9,7 @@ import { normalizeImageUrl, compressImageFile } from '../../utils/imageUtils';
 import { QuestionBankView } from '../questions/QuestionBankView';
 import { AdminClassMarksView } from './AdminClassMarksView';
 import { ParentAlertsView } from '../alerts/ParentAlertsView';
+import { AcebeeHubView } from '../hub/AcebeeHubView';
 import {
   Users,
   UserPlus,
@@ -43,6 +44,7 @@ import {
   Database,
   UserCog,
   Edit3,
+  Gamepad2,
   X,
   Check,
   Copy,
@@ -77,7 +79,7 @@ export const AdminDashboard: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'school-info' | 'accounts' | 'binding' | 'announcements' | 'question-bank' | 'all-marks' | 'alerts'
+    'overview' | 'school-info' | 'accounts' | 'binding' | 'announcements' | 'question-bank' | 'all-marks' | 'alerts' | 'acebee-hub'
   >('overview');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -339,7 +341,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   interface AdminNavItem {
-    id: 'overview' | 'school-info' | 'accounts' | 'binding' | 'announcements' | 'question-bank' | 'all-marks' | 'alerts';
+    id: 'overview' | 'school-info' | 'accounts' | 'binding' | 'announcements' | 'question-bank' | 'all-marks' | 'alerts' | 'acebee-hub';
     label: string;
     icon: React.ElementType;
     count?: number;
@@ -354,6 +356,7 @@ export const AdminDashboard: React.FC = () => {
     { id: 'question-bank', label: 'Question Bank', icon: BookOpen },
     { id: 'all-marks', label: 'Class Marks & Feedback', icon: Award },
     { id: 'alerts', label: 'Parent Alerts', icon: MessageCircle, count: parentAlerts.length },
+    { id: 'acebee-hub', label: 'Acebee Hub', icon: Gamepad2 },
   ];
 
   return (
@@ -1758,6 +1761,11 @@ export const AdminDashboard: React.FC = () => {
       {/* TAB 8: PARENT ALERTS & DISPATCHES */}
       {activeTab === 'alerts' && (
         <ParentAlertsView />
+      )}
+
+      {/* TAB 9: ACEBEE HUB */}
+      {activeTab === 'acebee-hub' && (
+        <AcebeeHubView userRole="admin" />
       )}
 
       {/* EDIT CLASS MODAL */}

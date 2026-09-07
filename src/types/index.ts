@@ -46,6 +46,7 @@ export interface SchoolClass {
   academicYear: string;
   teacherId: string;
   createdAt: string;
+  acebeeMathEnabled?: boolean;
 }
 
 export type Class = SchoolClass;

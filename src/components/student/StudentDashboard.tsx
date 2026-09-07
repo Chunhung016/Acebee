@@ -4,6 +4,7 @@ import { Quiz } from '../../types';
 import { QuizTakerModal } from './QuizTakerModal';
 import { UserAvatar } from '../common/UserAvatar';
 import { StudentWeakAreaDiagnostics } from './StudentWeakAreaDiagnostics';
+import { AcebeeHubView } from '../hub/AcebeeHubView';
 import {
   Award,
   BookOpen,
@@ -26,6 +27,7 @@ import {
   Filter,
   Layers,
   AlertCircle,
+  Gamepad2,
 } from 'lucide-react';
 
 export const StudentDashboard: React.FC = () => {
@@ -39,7 +41,7 @@ export const StudentDashboard: React.FC = () => {
     supabaseSyncInfo,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'quizzes' | 'diagnostics' | 'leaderboard' | 'grades' | 'teacher'>('quizzes');
+  const [activeTab, setActiveTab] = useState<'quizzes' | 'diagnostics' | 'leaderboard' | 'grades' | 'teacher' | 'acebee-hub'>('quizzes');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [activeQuizForTaking, setActiveQuizForTaking] = useState<Quiz | null>(null);
 
@@ -58,6 +60,16 @@ export const StudentDashboard: React.FC = () => {
     classes.find((c) => c.id === studentDetail?.classId) ||
     classes.find((c) => c.gradeLevel === 'Year 5') ||
     classes[0];
+
+  // Check if homeroom teacher has enabled Acebee Hub for this class
+  const isAcebeeHubEnabledForStudent = Boolean(studentClass?.acebeeMathEnabled);
+
+  // If tab was acebee-hub but teacher disabled it, auto-switch back to quizzes
+  useEffect(() => {
+    if (activeTab === 'acebee-hub' && !isAcebeeHubEnabledForStudent) {
+      setActiveTab('quizzes');
+    }
+  }, [activeTab, isAcebeeHubEnabledForStudent]);
   const teacherUser = users.find((u) => u.id === studentClass?.teacherId);
 
   // Robust Quiz Assignment Matcher
@@ -159,7 +171,7 @@ export const StudentDashboard: React.FC = () => {
   const fiveSubjects = ['Mathematics', 'English', 'Science', 'Social Studies', 'Art & Technology'] as const;
 
   interface StudentNavItem {
-    id: 'quizzes' | 'diagnostics' | 'leaderboard' | 'grades' | 'teacher';
+    id: 'quizzes' | 'diagnostics' | 'leaderboard' | 'grades' | 'teacher' | 'acebee-hub';
     label: string;
     icon: React.ElementType;
     count?: number;
@@ -172,6 +184,9 @@ export const StudentDashboard: React.FC = () => {
     { id: 'leaderboard', label: `Class Leaderboard (${leaderboardData.length})`, icon: Trophy },
     { id: 'grades', label: 'Mastery & Grades', icon: TrendingUp },
     { id: 'teacher', label: 'Homeroom Teacher', icon: User },
+    ...(isAcebeeHubEnabledForStudent
+      ? [{ id: 'acebee-hub' as const, label: 'Acebee Hub', icon: Gamepad2, highlight: true }]
+      : []),
   ];
 
   return (
@@ -704,6 +719,11 @@ export const StudentDashboard: React.FC = () => {
             <strong>Scope of Instruction:</strong> As your dedicated homeroom faculty member, {teacherUser?.fullName} teaches and evaluates your coursework across all 5 core modules: Mathematics, English, Science, Social Studies, and Art & Technology.
           </div>
         </div>
+      )}
+
+      {/* TAB 6: ACEBEE HUB (Only if enabled by class teacher) */}
+      {activeTab === 'acebee-hub' && isAcebeeHubEnabledForStudent && (
+        <AcebeeHubView userRole="student" />
       )}
       </main>
 

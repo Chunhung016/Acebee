@@ -27,6 +27,7 @@
         "gradeLevel": { "type": "string" },
         "academicYear": { "type": "string" },
         "teacherId": { "type": "string" },
+        "acebeeMathEnabled": { "type": "boolean" },
         "createdAt": { "type": "string" }
       },
       "required": ["id", "name", "gradeLevel", "academicYear", "createdAt"]

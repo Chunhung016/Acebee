@@ -13,11 +13,13 @@ import { TeacherRemediationView } from './TeacherRemediationView';
 import { QuizStatisticsModal } from './QuizStatisticsModal';
 import { ParentProfileModal } from './ParentProfileModal';
 import { PreviousQuizPickerModal } from './PreviousQuizPickerModal';
+import { AcebeeHubView } from '../hub/AcebeeHubView';
 import {
   BookOpen,
   Users,
   UserCheck,
   Award,
+  Gamepad2,
   MessageSquare,
   MessageCircle,
   PlusCircle,
@@ -75,7 +77,7 @@ export const TeacherDashboard: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts' | 'remediation'
+    'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts' | 'remediation' | 'acebee-hub'
   >('roster');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -622,7 +624,7 @@ export const TeacherDashboard: React.FC = () => {
   };
 
   interface TeacherNavItem {
-    id: 'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts' | 'remediation';
+    id: 'roster' | 'quizzes' | 'questions' | 'grading' | 'behavior' | 'gradebook' | 'alerts' | 'remediation' | 'acebee-hub';
     label: string;
     icon: React.ElementType;
     count?: number;
@@ -638,6 +640,7 @@ export const TeacherDashboard: React.FC = () => {
     { id: 'behavior', label: 'Parent Behavioral Notes', icon: MessageSquare },
     { id: 'gradebook', label: 'Gradebook & Submissions', icon: Award },
     { id: 'alerts', label: `Parent Alerts (${parentAlerts.length})`, icon: MessageCircle },
+    { id: 'acebee-hub', label: 'Acebee Hub', icon: Gamepad2 },
   ];
 
   return (
@@ -2335,6 +2338,18 @@ export const TeacherDashboard: React.FC = () => {
 
       {/* TAB 7: PARENT ALERTS & DISPATCHES */}
       {activeTab === 'alerts' && <ParentAlertsView teacherClassId={currentClass?.id} />}
+
+      {/* TAB 8: ACEBEE HUB */}
+      {activeTab === 'acebee-hub' && (
+        <AcebeeHubView
+          userRole="teacher"
+          selectedClassId={currentClass?.id}
+          onSelectClassId={(cid) => {
+            setSelectedClassId(cid);
+            setQuizClassId(cid);
+          }}
+        />
+      )}
       </main>
 
       {/* MODAL: Pick from Question Bank */}
