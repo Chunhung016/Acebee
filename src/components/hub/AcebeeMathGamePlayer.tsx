@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronLeft,
   RotateCcw,
-  Maximize2,
-  Minimize2,
   Sparkles,
   Gamepad2,
   AlertCircle,
+  X,
 } from 'lucide-react';
+import { BUNDLED_ACEBEE_MATH_HTML } from './acebeeMathFallback';
 
 interface AcebeeMathGamePlayerProps {
   onBack: () => void;
@@ -24,7 +25,6 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
   onBack,
   studentClassName,
 }) => {
-  const [isFullscreen, setIsFullscreen] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -34,6 +34,15 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
   } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Lock body scroll while game is open to avoid background page shifting
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
 
   // Allow pressing ESC to return to Hub
   useEffect(() => {
@@ -46,49 +55,57 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onBack]);
 
-  // Load the game: check local static files first, fallback to GitHub Raw if 404 (e.g., on Vercel)
+  // Robust multi-tier game loader:
+  // 1. Fetch latest directly from GitHub Raw (bypasses any Vercel SPA rewrite)
+  // 2. Check local /acebeemath/index.html (ensuring it's not rewritten to the React app)
+  // 3. Instant bundled fallback (ensures game ALWAYS opens smoothly)
   const initGameSource = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
 
-    try {
-      // 1. Test if local /acebeemath/index.html is reachable
-      const localRes = await fetch('/acebeemath/index.html', {
-        method: 'HEAD',
-        cache: 'no-cache',
-      });
-
-      if (localRes.ok) {
-        // Local static file exists and is accessible
-        setGameSource({ type: 'src', value: '/acebeemath/index.html' });
-        return;
-      }
-    } catch {
-      // Local fetch check failed, will fallback to GitHub Raw
-    }
-
-    // 2. Fallback: fetch HTML from GitHub raw and inject <base href="...">
+    // Tier 1: Try GitHub raw directly
     try {
       const gitRes = await fetch(GITHUB_RAW_HTML_URL, { cache: 'no-cache' });
-      if (!gitRes.ok) {
-        throw new Error(`无法从 GitHub 仓库加载游戏 (HTTP ${gitRes.status})`);
+      if (gitRes.ok) {
+        let html = await gitRes.text();
+        if (html.includes('startButton') && html.includes('ACEBEE')) {
+          const baseTag = `<base href="${GITHUB_RAW_BASE_URL}">`;
+          if (html.includes('<head>')) {
+            html = html.replace('<head>', `<head>\n  ${baseTag}`);
+          } else {
+            html = `${baseTag}\n${html}`;
+          }
+          setGameSource({ type: 'srcDoc', value: html });
+          return;
+        }
       }
-      let html = await gitRes.text();
-
-      // Inject <base> tag so all relative images (images/...) load directly from GitHub raw
-      const baseTag = `<base href="${GITHUB_RAW_BASE_URL}">`;
-      if (html.includes('<head>')) {
-        html = html.replace('<head>', `<head>\n  ${baseTag}`);
-      } else {
-        html = `${baseTag}\n${html}`;
-      }
-
-      setGameSource({ type: 'srcDoc', value: html });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '游戏加载失败，请检查网络连接';
-      setLoadError(msg);
-      setIsLoading(false);
+    } catch {
+      // GitHub network fetch failed, proceed to local or fallback
     }
+
+    // Tier 2: Check local static /acebeemath/index.html
+    try {
+      const localRes = await fetch('/acebeemath/index.html', { cache: 'no-cache' });
+      if (localRes.ok) {
+        const text = await localRes.text();
+        // Crucial: Must be genuinely the game, NOT the main React SPA rewritten by Vercel
+        if (text.includes('startButton') && !text.includes('id="root"')) {
+          setGameSource({ type: 'src', value: '/acebeemath/index.html' });
+          return;
+        }
+      }
+    } catch {
+      // Local check failed, proceed to bundled fallback
+    }
+
+    // Tier 3: Guaranteed bundled fallback
+    if (BUNDLED_ACEBEE_MATH_HTML) {
+      setGameSource({ type: 'srcDoc', value: BUNDLED_ACEBEE_MATH_HTML });
+      return;
+    }
+
+    setLoadError('游戏资源初始化失败，请点击重试');
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -96,32 +113,27 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
   }, [initGameSource, reloadKey]);
 
   const handleReload = () => {
+    setIsLoading(true);
     setGameSource(null);
     setReloadKey((prev) => prev + 1);
   };
 
-  const toggleFullscreen = () => {
-    setIsFullscreen((prev) => !prev);
-  };
-
-  return (
+  // Render directly into document.body using React Portal for true popout overlay
+  return createPortal(
     <div
       ref={containerRef}
-      className={`flex flex-col bg-slate-900 transition-all duration-200 overflow-hidden shadow-2xl ${
-        isFullscreen
-          ? 'fixed inset-0 z-50 w-screen h-screen'
-          : 'w-full h-[780px] lg:h-[820px] rounded-2xl border border-slate-700'
-      }`}
+      id="acebee-math-game-overlay"
+      className="fixed inset-0 z-[99999] w-screen h-screen flex flex-col bg-slate-950 overflow-hidden select-none"
     >
-      {/* Top Header Bar with prominent Back button */}
-      <header className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 z-10">
+      {/* Top Navigation Bar with Back Button */}
+      <header className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 z-20 shadow-md">
         <div className="flex items-center gap-3">
           {/* Main Back Button */}
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm transition-colors shadow-sm active:scale-95"
-            title="返回 Acebee Hub (或按 ESC 键)"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm transition-all shadow-sm active:scale-95 cursor-pointer"
+            title="返回 Acebee Hub (或按键盘 ESC 键)"
           >
             <ChevronLeft className="w-4 h-4 stroke-[3]" />
             <span>返回 Acebee Hub</span>
@@ -135,49 +147,40 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
               Acebee 数学冒险
             </span>
             {studentClassName && (
-              <span className="text-xs text-slate-400 hidden md:inline">
-                ({studentClassName})
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 hidden md:inline border border-slate-700">
+                {studentClassName}
               </span>
             )}
           </div>
         </div>
 
-        {/* Right Controls: Reload & Fullscreen Toggle */}
+        {/* Right Controls: Reload & Exit */}
         <div className="flex items-center gap-2">
           {/* Reload Game */}
           <button
             type="button"
             onClick={handleReload}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700 cursor-pointer"
             title="重新加载游戏"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">重载</span>
           </button>
 
-          {/* Toggle Fullscreen / Window */}
+          {/* Close / Exit Button */}
           <button
             type="button"
-            onClick={toggleFullscreen}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700"
-            title={isFullscreen ? '退出全屏' : '全屏模式'}
+            onClick={onBack}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-red-950/60 hover:bg-red-900/80 text-red-200 hover:text-white text-xs font-medium transition-colors border border-red-800/60 cursor-pointer"
+            title="退出游戏 (ESC)"
           >
-            {isFullscreen ? (
-              <>
-                <Minimize2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">退出全屏</span>
-              </>
-            ) : (
-              <>
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">全屏模式</span>
-              </>
-            )}
+            <X className="w-3.5 h-3.5" />
+            <span>退出</span>
           </button>
         </div>
       </header>
 
-      {/* Embedded Game Iframe (Auto-fallback to GitHub raw if local static is 404 on Vercel) */}
+      {/* Embedded Game Iframe (Auto-loads HTML with GitHub Raw base for assets) */}
       <div className="relative flex-1 w-full h-full bg-[#e9f0cd] overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#e9f0cd] text-[#5b452e] space-y-3">
@@ -201,7 +204,7 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
             <button
               type="button"
               onClick={handleReload}
-              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors"
+              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>重试加载</span>
@@ -222,6 +225,7 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
           />
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
