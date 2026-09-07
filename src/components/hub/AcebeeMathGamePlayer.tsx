@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ChevronLeft,
   RotateCcw,
@@ -6,8 +6,7 @@ import {
   Minimize2,
   Sparkles,
   Gamepad2,
-  Github,
-  ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
 
 interface AcebeeMathGamePlayerProps {
@@ -16,14 +15,24 @@ interface AcebeeMathGamePlayerProps {
   studentClassName?: string;
 }
 
+const GITHUB_RAW_HTML_URL =
+  'https://raw.githubusercontent.com/Chunhung016/acebeemath/main/index.html';
+const GITHUB_RAW_BASE_URL =
+  'https://raw.githubusercontent.com/Chunhung016/acebeemath/main/';
+
 export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
   onBack,
   studentClassName,
 }) => {
-  // Starts directly in full-screen in system as requested by user
   const [isFullscreen, setIsFullscreen] = useState(true);
-  const [iframeKey, setIframeKey] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [gameSource, setGameSource] = useState<{
+    type: 'src' | 'srcDoc';
+    value: string;
+  } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Allow pressing ESC to return to Hub
@@ -37,9 +46,58 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onBack]);
 
-  const handleReload = () => {
+  // Load the game: check local static files first, fallback to GitHub Raw if 404 (e.g., on Vercel)
+  const initGameSource = useCallback(async () => {
     setIsLoading(true);
-    setIframeKey((prev) => prev + 1);
+    setLoadError(null);
+
+    try {
+      // 1. Test if local /acebeemath/index.html is reachable
+      const localRes = await fetch('/acebeemath/index.html', {
+        method: 'HEAD',
+        cache: 'no-cache',
+      });
+
+      if (localRes.ok) {
+        // Local static file exists and is accessible
+        setGameSource({ type: 'src', value: '/acebeemath/index.html' });
+        return;
+      }
+    } catch {
+      // Local fetch check failed, will fallback to GitHub Raw
+    }
+
+    // 2. Fallback: fetch HTML from GitHub raw and inject <base href="...">
+    try {
+      const gitRes = await fetch(GITHUB_RAW_HTML_URL, { cache: 'no-cache' });
+      if (!gitRes.ok) {
+        throw new Error(`无法从 GitHub 仓库加载游戏 (HTTP ${gitRes.status})`);
+      }
+      let html = await gitRes.text();
+
+      // Inject <base> tag so all relative images (images/...) load directly from GitHub raw
+      const baseTag = `<base href="${GITHUB_RAW_BASE_URL}">`;
+      if (html.includes('<head>')) {
+        html = html.replace('<head>', `<head>\n  ${baseTag}`);
+      } else {
+        html = `${baseTag}\n${html}`;
+      }
+
+      setGameSource({ type: 'srcDoc', value: html });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '游戏加载失败，请检查网络连接';
+      setLoadError(msg);
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    initGameSource();
+  }, [initGameSource, reloadKey]);
+
+  const handleReload = () => {
+    setGameSource(null);
+    setReloadKey((prev) => prev + 1);
   };
 
   const toggleFullscreen = () => {
@@ -84,21 +142,8 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
           </div>
         </div>
 
-        {/* Right Controls: GitHub link, Reload, Fullscreen Toggle */}
+        {/* Right Controls: Reload & Fullscreen Toggle */}
         <div className="flex items-center gap-2">
-          {/* GitHub Source Reference */}
-          <a
-            href="https://github.com/Chunhung016/acebeemath"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors border border-slate-700"
-            title="访问 GitHub 源码仓库: Chunhung016/acebeemath"
-          >
-            <Github className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">GitHub: Chunhung016/acebeemath</span>
-            <ExternalLink className="w-3 h-3 opacity-60" />
-          </a>
-
           {/* Reload Game */}
           <button
             type="button"
@@ -115,7 +160,7 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
             type="button"
             onClick={toggleFullscreen}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700"
-            title={isFullscreen ? '退出全屏' : '进入全屏'}
+            title={isFullscreen ? '退出全屏' : '全屏模式'}
           >
             {isFullscreen ? (
               <>
@@ -132,7 +177,7 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
         </div>
       </header>
 
-      {/* Embedded Game Iframe (Directly runs code from GitHub repo) */}
+      {/* Embedded Game Iframe (Auto-fallback to GitHub raw if local static is 404 on Vercel) */}
       <div className="relative flex-1 w-full h-full bg-[#e9f0cd] overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#e9f0cd] text-[#5b452e] space-y-3">
@@ -144,15 +189,38 @@ export const AcebeeMathGamePlayer: React.FC<AcebeeMathGamePlayerProps> = ({
           </div>
         )}
 
-        <iframe
-          key={iframeKey}
-          src="/acebeemath/index.html"
-          title="Acebee 数学冒险 (Chunhung016/acebeemath)"
-          className="w-full h-full border-0"
-          allow="autoplay; fullscreen; clipboard-write"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          onLoad={() => setIsLoading(false)}
-        />
+        {loadError && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-900 text-white p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="max-w-md">
+              <h3 className="text-base font-bold text-red-400">游戏加载异常</h3>
+              <p className="text-xs text-slate-400 mt-1">{loadError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleReload}
+              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>重试加载</span>
+            </button>
+          </div>
+        )}
+
+        {gameSource && (
+          <iframe
+            key={reloadKey}
+            src={gameSource.type === 'src' ? gameSource.value : undefined}
+            srcDoc={gameSource.type === 'srcDoc' ? gameSource.value : undefined}
+            title="Acebee 数学冒险"
+            className="w-full h-full border-0"
+            allow="autoplay; fullscreen; clipboard-write"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            onLoad={() => setIsLoading(false)}
+          />
+        )}
       </div>
     </div>
   );
