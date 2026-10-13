@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#e8ede0">
+<meta name="description" content="An offline, cinematic 3D plant life cycle for the classroom. Explore bean and tomato through eight stages: germination, roots, leaves, flowers, pods and fruit.">
+<title>Plant Growth Lab — a life in eight stages</title>
+<style>
+:root{
+  color-scheme:light;--ink:#264334;--muted:#73826c;--green:#315a40;--lime:#e2f2b5;
+  --paper:#e8ede0;--glass:rgba(252,253,245,.76);--edge:rgba(255,255,250,.9);
+  --dock-height:142px;--dock-gap:max(22px,env(safe-area-inset-bottom));
+  font-family:Inter,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif;font-synthesis:none;
+}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden;overscroll-behavior:none;background:var(--paper);color:var(--ink)}
+body{height:100dvh}
+button,input,select{font:inherit}
+button{color:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:background .2s,box-shadow .2s,color .2s,transform .2s}
+button:disabled{opacity:.26;cursor:not-allowed}
+button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #658647;outline-offset:4px}
+button:active:not(:disabled){transform:scale(.95)}
+svg{vertical-align:middle}
+button svg{width:18px;height:18px;flex-shrink:0;pointer-events:none}
+[hidden],.hidden{display:none!important}
+.sr-only,.play-button span{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+main,.lab{width:100%;height:100%;margin:0;padding:0}
+.lab{position:relative;isolation:isolate;overflow:hidden}
+.viewport{position:absolute;inset:0;overflow:hidden;background:radial-gradient(ellipse at 49% 33%,#f8faef 0%,#edf1e5 38%,#dde5d3 82%,#d6dfcb 100%)}
+.viewport:after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse at 48% 43%,transparent 40%,#9cab8c0a 80%,#83947614 100%)}
+#scene{display:block;width:100%;height:100%;touch-action:none;cursor:grab;outline:none}
+#scene:focus-visible{outline:2px solid #91aa7370;outline-offset:-5px}
+#scene.dragging{cursor:grabbing!important}
+.viewport-head{position:absolute;top:max(22px,env(safe-area-inset-top));left:max(24px,env(safe-area-inset-left));right:max(24px,env(safe-area-inset-right));display:flex;align-items:center;justify-content:space-between;gap:12px;pointer-events:none;z-index:6}
+.view-options{display:flex;align-items:center;gap:8px;pointer-events:auto}
+.segmented,.icon-button,.focus-bar,.sequence,.view-rail{background:var(--glass);border:1px solid var(--edge);box-shadow:0 8px 30px #30422b09,0 1px 3px #30422b05,inset 0 1px 0 #ffffffb3;backdrop-filter:blur(22px) saturate(1.22);-webkit-backdrop-filter:blur(22px) saturate(1.22)}
+.segmented{display:flex;gap:2px;padding:4px;border-radius:28px}
+.segmented button{display:grid;place-items:center;width:35px;height:35px;padding:0;border:0;border-radius:50%;background:none;color:#6c7f61}
+.segmented button:hover:not(.active){background:#dce6d082;color:var(--green)}
+.segmented button.active{background:var(--green);color:#eef6dc;box-shadow:0 2px 5px #23472918}
+.icon-button{position:relative;display:grid;place-items:center;width:43px;height:43px;padding:0;border-radius:50%;color:#536c48}
+.icon-button:hover:not(:disabled){background:#fffff5;box-shadow:0 7px 22px #30422b12;color:#254932}
+.icon-button.active{background:var(--green);color:#eff7e0;border-color:#315a40}
+.anatomy-toggle{display:flex;gap:8px;align-items:center}
+.view-rail{position:absolute;right:max(24px,env(safe-area-inset-right));top:44%;transform:translateY(-50%);z-index:5;padding:5px;display:flex;flex-direction:column;gap:4px;border-radius:32px;background:rgba(252,253,245,.62)}
+.view-rail .icon-button{width:33px;height:33px;border:0;background:none;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.view-rail .icon-button:hover{background:#e3ebd7}
+.view-rail .icon-button.active{background:#d6e5c3;color:#315a40}
+.rail-separator{height:1px;background:#a8b69633;margin:3px 6px}
+.view-bottom{position:absolute;left:12px;right:12px;bottom:calc(var(--dock-gap) + var(--dock-height) + 14px);z-index:6;display:flex;justify-content:center;pointer-events:none}
+.focus-bar{display:flex;align-items:center;gap:2px;padding:5px;border-radius:30px;pointer-events:auto;background:rgba(251,253,242,.64);box-shadow:0 6px 24px #30422b07}
+.focus-bar button{border:0;border-radius:22px;padding:9px 12px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;font-weight:550;line-height:1;background:none;color:#6c7c60;min-height:33px}
+.focus-bar button svg{width:15px;height:15px}
+.focus-bar button:hover:not(:disabled){background:#e2ecd4;color:#294d34}
+.focus-bar button.active{background:#dce9cd;color:#315635}
+.sequence{position:absolute;z-index:10;left:50%;bottom:var(--dock-gap);transform:translateX(-50%);width:min(940px,calc(100% - 64px));padding:13px 15px 12px;border-radius:29px;background:rgba(252,253,246,.80);box-shadow:0 18px 65px #35432c15,0 4px 12px #35432c08,inset 0 1px 0 #fff}
+.transport{display:flex;align-items:center;gap:17px;padding:0 5px 9px}
+.play-button{position:relative;display:grid;place-items:center;flex-shrink:0;width:39px;height:39px;border:0;border-radius:50%;background:var(--green);color:#f0f7df;box-shadow:0 3px 10px #2a492c15}
+.play-button:hover{background:#244b34;box-shadow:0 4px 13px #2a492c23}
+.play-button svg{width:14px;height:14px}
+.play-button[aria-pressed="false"] svg{margin-left:2px}
+.progress-wrap{flex:1;min-width:30px;height:30px;display:flex;align-items:center}
+.progress-wrap input{display:block;appearance:none;-webkit-appearance:none;width:100%;height:28px;padding:0;margin:0;cursor:pointer;background:transparent;border-radius:20px;touch-action:pan-y}
+.progress-wrap input::-webkit-slider-runnable-track{height:3px;border-radius:8px;background:linear-gradient(to right,#5f8650 0%,#5f8650 var(--progress,0%),#d6dfca var(--progress,0%),#d6dfca 100%)}
+.progress-wrap input::-moz-range-track{height:3px;border-radius:8px;background:linear-gradient(to right,#5f8650 0%,#5f8650 var(--progress,0%),#d6dfca var(--progress,0%),#d6dfca 100%)}
+.progress-wrap input::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:13px;height:13px;margin-top:-5px;border-radius:50%;border:3px solid #fafbf4;background:#527746;box-shadow:0 0 0 1px #6f8e5270,0 2px 5px #36512812;transition:box-shadow .2s}
+.progress-wrap input::-moz-range-thumb{width:8px;height:8px;border-radius:50%;border:3px solid #fafbf4;background:#527746;box-shadow:0 0 0 1px #6f8e5270}
+.progress-wrap input:hover::-webkit-slider-thumb{box-shadow:0 0 0 5px #92af7624}
+.dock-step{font-size:9px;letter-spacing:1.1px;font-variant-numeric:tabular-nums;color:#6f8160;white-space:nowrap}
+.speed{display:flex;align-items:center}
+.speed select{appearance:none;-webkit-appearance:none;font-size:10px;font-weight:600;color:#6a7d5e;text-align:center;min-width:40px;padding:9px 7px;border:1px solid #cdd9bf80;background:#eff4e785;border-radius:15px;cursor:pointer;outline-offset:2px}
+.speed select:hover{background:#e7efdb}
+.language-switch{display:flex;align-items:center;gap:2px;padding:3px;flex-shrink:0;border:1px solid #d3dec780;border-radius:19px;background:#e9f0de80}
+.language-switch button{border:0;background:none;color:#6c805e;border-radius:15px;padding:7px 9px;font-size:9px;font-weight:600;line-height:1.2;white-space:nowrap}
+.language-switch button.active{background:#fcfff4;color:#335a40;box-shadow:0 1px 5px #34472d12}
+.language-switch button:hover:not(.active){background:#e0e9d2}
+html[lang="zh-Hans"] .stage-button .name{font-size:10px;letter-spacing:.3px}
+html[lang="zh-Hans"] dialog p,html[lang="zh-Hans"] dialog li{line-height:1.95}
+html[lang="zh-Hans"] .eyebrow{letter-spacing:1px}
+.stages{position:relative;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:2px}
+.stages::-webkit-scrollbar{display:none}
+.stage-button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-width:0;height:65px;padding:8px 3px;border:1px solid transparent;border-radius:19px;background:none;text-align:center;color:#6c7e5e}
+.stage-button:hover{background:#e4ecd880;color:#34573a}
+.stage-button.active{background:#315a40;color:#f2f7e6;border-color:#315a40;box-shadow:0 3px 9px #30472c14}
+.stage-button .stage-top{display:flex;align-items:center;justify-content:center;height:23px}
+.stage-button .stage-top svg{width:22px;height:23px;stroke-width:1.2}
+.stage-button.active .stage-top svg{color:#d9edb0}
+.stage-button .number,.stage-button .phase{display:none}
+.stage-button .name{display:block;white-space:nowrap;font-size:9px;line-height:1.2;font-weight:550;letter-spacing:.05px}
+.stage-button:focus-visible{outline-offset:-3px}
+#labels{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.label{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;border:1px solid #f9fcecbb;border-radius:18px;background:#fbfdf1d9;padding:7px 11px;font-size:10px;line-height:1.2;color:#345b3d;box-shadow:0 4px 18px #30432c09;white-space:nowrap;display:flex;gap:6px;align-items:center;max-width:180px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.label:before{content:"";width:4px;height:4px;border-radius:50%;background:#7c9858}
+.label:hover{background:#f2f8e6;border-color:#a9c18c}
+.label:active{transform:translate(-50%,-50%) scale(.97)!important}
+.label.root{color:#827046}.label.root:before{background:#b39c6c}
+.label.flower{color:#8a6594}.label.flower:before{background:#b491bf}
+.label.fruit{color:#658345}
+.leader{position:absolute;height:1px;background:#71895b63;transform-origin:0 50%;pointer-events:none}
+.detail-popover{position:absolute;top:86px;right:24px;width:275px;border-radius:23px;background:#fcfff3ed;border:1px solid #fffff7;box-shadow:0 16px 50px #30432c12;z-index:8;padding:22px;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.close-detail{position:absolute;right:12px;top:12px;display:grid;place-items:center;width:27px;height:27px;border:0;background:#e8efdd;border-radius:50%}
+.eyebrow{font-size:9px;letter-spacing:1.7px;font-weight:600;text-transform:uppercase;color:#6e8457;margin:0 0 10px}
+.detail-popover h3{font-size:19px;font-weight:550;letter-spacing:-.5px;margin:0 20px 10px 0}
+.detail-popover p{font-size:11px;line-height:1.75;color:#687a5c;margin:0}
+.small-button{border:1px solid #d4e0c4;border-radius:18px;padding:8px 12px;background:#ebf2df;font-size:10px;font-weight:600;display:inline-flex;gap:8px;align-items:center;line-height:1.4}
+.detail-popover .small-button{margin-top:15px}
+.status-toast{position:absolute;z-index:9;bottom:calc(var(--dock-gap) + var(--dock-height) + 74px);left:50%;transform:translateX(-50%);padding:10px 17px;border:1px solid #ffffff60;background:#31573ded;border-radius:28px;color:#f5f8eb;font-size:10px;line-height:1.5;text-align:center;max-width:min(450px,80%);pointer-events:none;opacity:0;transition:opacity .25s}
+.status-toast.show{opacity:1}
+.scene-error{position:absolute;inset:0;z-index:20;display:grid;place-content:center;padding:30px;text-align:center;background:#edf1e1}
+.scene-error h3{font-size:23px;font-weight:550;margin:0 0 12px}
+.scene-error p{font-size:13px;line-height:1.7;max-width:430px}
+.scene-error button{margin:12px auto;background:var(--green);color:white;padding:10px 20px;border:0;border-radius:22px}
+.noscript{position:fixed;inset:0;display:grid;place-content:center;padding:25px;background:var(--paper);z-index:100;text-align:center}
+dialog{color:var(--ink);border:1px solid #fffff7;border-radius:27px;padding:30px;width:min(610px,calc(100vw - 28px));max-height:85dvh;background:#fcfdf5;box-shadow:0 24px 90px #233b2740;overscroll-behavior:contain}
+dialog::backdrop{background:#41533b45;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+dialog h2{font-size:24px;letter-spacing:-.7px;font-weight:550;margin:0 30px 18px 0}
+dialog h3{font-size:12px;font-weight:650;margin:21px 0 8px}
+dialog p,dialog li{font-size:12px;line-height:1.8;color:#66775d}
+dialog ul{padding-left:20px}
+dialog a{color:var(--green)}
+.dialog-close{position:absolute;right:19px;top:18px;display:grid;place-items:center;border:0;background:#eaf0df;width:30px;height:30px;border-radius:50%;font-size:20px;color:#5d7450}
+.controls-table{display:grid;grid-template-columns:130px 1fr;gap:9px;font-size:11px;line-height:1.5;color:#637455;margin-top:14px}
+.controls-table span:nth-child(odd){font-weight:600;color:#35573b}
+.license-text{white-space:pre-wrap;font-family:monospace;font-size:9px;color:#7d846f}
+.motion-option{display:flex;align-items:center;gap:8px;font-size:11px;line-height:1.6;color:#4c6645;margin-top:18px}
+.stage-notes{margin:25px 0 15px;border:1px solid #dfe7d3;background:#eff4e7;border-radius:20px;padding:22px}
+.stage-notes h2{margin-bottom:9px;font-size:23px}.stage-notes h3{margin-top:16px}.stage-notes p{margin:0}
+.credits-button{margin:0 0 6px;background:transparent;color:#7b8c6a}
+@media(min-width:1600px){.sequence{width:1020px;padding:15px 18px 14px}.stage-button{height:70px}.stage-button .name{font-size:10px}}
+@media(max-width:850px){:root{--dock-gap:max(17px,env(safe-area-inset-bottom))}.sequence{width:calc(100% - 36px);padding:11px;border-radius:26px}.stage-button{height:61px;border-radius:17px}.stage-button .name{font-size:8px}.transport{gap:13px}.view-rail{right:17px}.viewport-head{left:18px;right:18px}.focus-bar button{padding:9px 10px}.view-bottom{bottom:calc(var(--dock-gap) + var(--dock-height) + 12px)}}
+@media(max-width:600px){
+  :root{--dock-gap:max(12px,env(safe-area-inset-bottom))}
+  .viewport-head{top:max(15px,env(safe-area-inset-top));left:13px;right:13px;gap:7px}
+  .view-options{gap:5px}.segmented{gap:0;padding:3px}.segmented button{width:31px;height:31px}.segmented button svg{width:17px;height:17px}
+  .icon-button{width:37px;height:37px}.icon-button svg{width:17px;height:17px}.anatomy-toggle{gap:4px}.utility-tools{gap:5px}
+  .view-rail{right:12px;top:42%;padding:4px;gap:3px}.view-rail .icon-button{width:29px;height:30px}
+  .sequence{width:calc(100% - 22px);padding:11px 8px 9px;border-radius:25px}
+  .transport{padding:0 6px 8px;gap:12px}.play-button{width:35px;height:35px}.dock-step{font-size:8px;letter-spacing:.5px}.speed select{min-width:34px;padding:8px 5px;font-size:9px}
+  .transport{gap:10px}.dock-step{display:none}.language-switch{padding:2px;gap:0}.language-switch button{padding:7px 7px;font-size:9px}
+  .stages{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:76px;gap:3px;padding:2px}
+  .stage-button{height:59px;border-radius:17px;gap:6px}.stage-button .name{font-size:9px}.stage-button .stage-top svg{width:21px;height:22px}
+  .focus-bar{padding:4px;gap:2px}.focus-bar button{width:37px;height:34px;padding:0;min-height:34px}.focus-bar button svg{width:16px;height:16px}.focus-name{display:none}
+  .detail-popover{top:71px;right:13px;width:min(270px,calc(100% - 26px));padding:20px}.label{font-size:9px;padding:6px 9px}
+  .status-toast{bottom:calc(var(--dock-gap) + var(--dock-height) + 66px);font-size:9px;padding:9px 13px;max-width:85%}
+  dialog{padding:26px 22px}.controls-table{grid-template-columns:100px 1fr;font-size:10px}.stage-notes{padding:18px}
+}
+@media(max-width:350px){.viewport-head{left:9px;right:9px}.view-options{gap:4px}.segmented button{width:28px;height:29px}.icon-button{width:34px;height:35px}.utility-tools{gap:4px}.transport{gap:9px}.dock-step{display:none}}
+@media(max-height:520px) and (min-width:700px){
+  :root{--dock-gap:max(10px,env(safe-area-inset-bottom))}
+  .viewport-head{top:12px;left:15px;right:15px}.icon-button{width:36px;height:36px}.segmented{padding:3px}.segmented button{width:30px;height:30px}
+  .view-bottom{top:12px;bottom:auto;left:50%;right:auto;transform:translateX(-50%)}.focus-bar{padding:3px}.focus-bar button{width:32px;min-height:30px;padding:0}.focus-name{display:none}
+  .sequence{width:min(800px,calc(100% - 70px));padding:8px 11px;border-radius:23px}.transport{padding-bottom:4px;gap:14px}.play-button{width:31px;height:31px}.stage-button{height:49px;padding:5px 3px;gap:3px;border-radius:15px}.stage-button .stage-top{height:19px}.stage-button .stage-top svg{width:18px;height:19px}.stage-button .name{font-size:8px}
+  .view-rail{right:15px;top:42%;padding:3px;gap:0}.view-rail .icon-button{width:27px;height:26px}.rail-separator{margin:2px 5px}
+  .status-toast{bottom:calc(var(--dock-gap) + var(--dock-height) + 12px)}
+}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+/* Plant selector */
+.plant-tab-bar{display:flex;gap:3px;padding:4px;border-radius:26px;background:var(--glass);border:1px solid var(--edge);box-shadow:0 8px 30px #30422b09,0 1px 3px #30422b05,inset 0 1px 0 #ffffffb3;backdrop-filter:blur(22px) saturate(1.22);-webkit-backdrop-filter:blur(22px) saturate(1.22);pointer-events:auto}
+.plant-tab-bar button{display:flex;align-items:center;gap:6px;padding:7px 13px;border:0;border-radius:20px;background:none;color:#6c7f61;font-size:10px;font-weight:600;line-height:1;transition:background .18s,color .18s,box-shadow .18s;cursor:pointer;pointer-events:auto}
+.plant-tab-bar button svg{flex-shrink:0;pointer-events:none;width:15px;height:15px}
+.plant-tab-bar button:hover:not(.active){background:#dce6d082;color:var(--green)}
+.plant-tab-bar button.active{background:var(--green);color:#eef6dc;box-shadow:0 2px 6px #23472922}
+#plantSwitchFade{position:absolute;inset:0;z-index:15;background:#f0f4e8;opacity:0;pointer-events:none;transition:opacity .22s}
+#plantSwitchFade.fading{opacity:1}
+@media(max-width:600px){.plant-tab-bar button{padding:6px 9px;font-size:9px;gap:4px}}
+@media(max-height:520px) and (min-width:700px){.plant-tab-bar button{padding:5px 10px;font-size:9px}}/* Compact navigation controls retain the original immersive floating layout. */
+.view-rail .scroll-mode{display:flex;flex-direction:column;gap:3px;border-bottom:1px solid #a8b69633;padding:0 0 6px;margin-bottom:2px}
+.view-rail .scroll-mode .icon-button{font-size:9px;font-weight:650;width:33px;height:31px;letter-spacing:.1px}
+.view-rail .scroll-mode .icon-button.active{background:#315a40;color:#f3f8e9}
+.view-rail #moveUp,.view-rail #moveDown{color:#365e3b}
+@media(max-width:600px){.view-rail .scroll-mode .icon-button{width:29px;height:27px}.view-rail{top:41%}}
+@media(max-height:540px){.view-rail{top:43%;display:grid;grid-template-columns:repeat(2,27px);gap:2px;padding:4px;border-radius:22px}.view-rail .icon-button{height:25px;width:27px}.view-rail .scroll-mode{grid-column:1/-1;flex-direction:row;justify-content:center;padding-bottom:3px;gap:2px}.view-rail .scroll-mode .icon-button{height:25px;width:27px}.view-rail .rail-separator{grid-column:1/-1;margin:2px 5px}}
+
+/* A quiet fold-away dock. Play remains available in immersive mode. */
+.panel-toggle{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border:1px solid #cdd9bf70;border-radius:50%;background:#eaf0df85;color:#5a7454;padding:0;cursor:pointer;transition:background .18s,transform .18s}
+.panel-toggle:hover{background:#dce8cf;color:#2b5135}
+.panel-toggle:focus-visible{outline:2px solid #517746;outline-offset:3px}
+.panel-toggle svg{width:18px;height:18px;transition:transform .26s ease}
+.sequence.is-collapsed{width:146px;padding:9px 10px;border-radius:32px;background:rgba(250,253,242,.86)}
+.sequence.is-collapsed .transport{padding:0;gap:12px;justify-content:space-between}
+.sequence.is-collapsed .dock-step{display:inline;font-size:9px;letter-spacing:.4px}
+.sequence.is-collapsed .panel-toggle{flex-basis:35px;width:35px;height:35px;background:transparent;border-color:transparent}
+.sequence.is-collapsed .panel-toggle:hover{background:#e2ebd6}
+.sequence.is-collapsed .panel-toggle svg{transform:rotate(180deg)}
+.sequence [hidden],.view-bottom[hidden]{display:none!important}
+.sequence.dock-opening{animation:dock-reveal .28s cubic-bezier(.2,.7,.2,1)}
+.lab.controls-collapsed .status-toast{bottom:calc(var(--dock-gap) + var(--dock-height) + 14px)}
+@keyframes dock-reveal{from{opacity:.6;translate:0 7px}to{opacity:1;translate:0 0}}
+@media(max-width:600px){.panel-toggle{width:32px;height:32px;flex-basis:32px}.transport{gap:8px}.sequence.is-collapsed{width:142px}.sequence.is-collapsed .play-button{width:36px;height:36px}}
+@media(prefers-reduced-motion:reduce){.sequence.dock-opening{animation:none}.panel-toggle,.panel-toggle svg{transition:none}}
+
+/* Viewing tools live inside the bottom dock; they collapse to a "more" menu on narrow screens. */
+.dock-tools{position:relative;display:flex;align-items:center;flex-shrink:0}
+.tool-list{display:flex;align-items:center;gap:2px;padding:4px;border-radius:28px;background:var(--glass);border:1px solid var(--edge);box-shadow:0 8px 30px #30422b09,0 1px 3px #30422b05,inset 0 1px 0 #ffffffb3;backdrop-filter:blur(22px) saturate(1.22);-webkit-backdrop-filter:blur(22px) saturate(1.22)}
+.tool-button{position:relative;display:grid;place-items:center;width:35px;height:35px;padding:0;border:0;border-radius:50%;background:none;color:#6c7f61}
+.tool-button:hover:not(.active){background:#dce6d082;color:var(--green)}
+.tool-button svg{width:18px;height:18px}
+.tool-button:hover:not(.active){background:#e0e9d2;color:#2f5a3c}
+.tool-button.active{background:var(--green);color:#eef6dc;box-shadow:0 2px 5px #23472918}
+.tool-button .tool-dot{position:absolute;right:5px;top:5px;width:5px;height:5px;border-radius:50%;background:#e2a93b;box-shadow:0 0 0 1.5px #fcfff4}
+.tool-button[data-mood="golden"] .tool-dot{background:#e98a2b}.tool-button[data-mood="studio"] .tool-dot{background:#8fa3b8}.tool-button[data-mood="day"] .tool-dot{background:#e2c13b}
+#toolsMore{display:none;width:43px;height:43px;background:var(--glass);border:1px solid var(--edge);box-shadow:0 8px 30px #30422b09,inset 0 1px 0 #ffffffb3;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);color:#536c48}
+#fxLayer{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
+.fx-tag{position:absolute;transform:translate(-50%,-165%);font-size:10px;font-weight:700;letter-spacing:.2px;padding:2px 7px;border-radius:9px;white-space:nowrap;background:#fbfdf3e6;box-shadow:0 2px 9px #2c3a251c;border:1px solid #fff}
+.fx-tag[data-k="co2"]{color:#57616a;transform:translate(-105%,-140%)}.fx-tag[data-k="o2"]{transform:translate(5%,-140%)}.fx-tag[data-k="sugar"]{transform:translate(8%,-40%)}.fx-tag[data-k="h2o"]{transform:translate(-108%,-40%)}
+.fx-tag[data-k="co2"]{}.fx-tag[data-k="o2"]{color:#0f8aa3}.fx-tag[data-k="h2o"]{color:#1d6fc4}.fx-tag[data-k="sugar"]{color:#b06c12}
+.photo-eq{position:absolute;left:24px;max-width:calc(100% - 32px);text-align:center;padding:8px 15px 7px;border-radius:17px;background:rgba(252,253,246,.9);border:1px solid #fffff7;box-shadow:0 10px 30px #35432c1c;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#28422f;animation:eqIn .5s ease both}
+.photo-eq .eq-line{font-size:14px;font-weight:650;white-space:nowrap;font-variant-numeric:tabular-nums}
+.photo-eq .t{opacity:.32;transition:opacity .4s,color .4s,text-shadow .4s}
+.photo-eq .t.on{opacity:1}.photo-eq .t.now{text-shadow:0 0 10px #ffe38a}
+.photo-eq .t[data-t="co2"].on{color:#4e5a62}.photo-eq .t[data-t="h2o"].on{color:#1d6fc4}.photo-eq .t[data-t="sugar"].on{color:#b06c12}.photo-eq .t[data-t="o2"].on{color:#0f8aa3}.photo-eq .t[data-t="light"].on{color:#c28a00}
+.photo-eq .arrow{display:inline-flex;flex-direction:column;align-items:center;line-height:.9;margin:0 2px;vertical-align:-2px}.photo-eq .arrow i{font-style:normal;font-size:8px;font-weight:600}
+.photo-eq small{display:block;margin-top:3px;font-size:9.5px;opacity:.72;white-space:nowrap}
+@keyframes eqIn{from{opacity:0;translate:0 -6px}to{opacity:1;translate:0 0}}
+@media(max-width:600px){.photo-eq{left:50%;transform:translateX(-50%)}.photo-eq .eq-line{font-size:12px}.photo-eq small{font-size:8.5px;white-space:normal}}
+.microscope{position:absolute;inset:0;z-index:9}
+.micro-backdrop{position:absolute;inset:0;background:radial-gradient(circle at 50% 48%,rgba(14,26,20,.18),rgba(14,26,20,.5));opacity:0;transition:opacity .45s ease}
+.microscope.open .micro-backdrop{opacity:1}
+#lab.micro-open #scene{filter:blur(5px) saturate(.8) brightness(.8);transition:filter .45s ease}
+#scene{transition:filter .45s ease}
+#lab.micro-open #labels,#lab.micro-open #fxLayer,#lab.micro-open #measureLayer{visibility:hidden}
+canvas.micro-pick{cursor:zoom-in!important}
+.micro-lens{position:absolute;border-radius:50%;overflow:hidden;background:#0d1914;transform:scale(.12);opacity:0;transition:transform .62s cubic-bezier(.2,.9,.2,1),opacity .32s ease;box-shadow:0 0 0 6px #22302b,0 0 0 8px #8d9a91,0 0 0 13px #2b3934,0 0 0 14px #6d7b72,0 34px 90px rgba(0,0,0,.5)}
+.microscope.open .micro-lens{transform:scale(1);opacity:1}
+.micro-lens canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.micro-lens canvas:active{cursor:grabbing}
+.micro-lens::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;box-shadow:inset 0 0 70px 22px rgba(0,0,0,.6),inset 0 0 3px 1px rgba(255,255,255,.3);background:radial-gradient(circle at 32% 22%,rgba(255,255,255,.08),transparent 38%)}
+.micro-labels{position:absolute;inset:0;pointer-events:none;z-index:2}
+.micro-dot{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#f3ffe8;box-shadow:0 0 0 2px rgba(20,40,30,.55),0 0 8px #d8ffd0}
+.micro-line{position:absolute;height:1px;background:linear-gradient(90deg,#e9ffe0cc,#e9ffe055);transform-origin:0 0}
+.micro-tag{position:absolute;transform:translate(-50%,-50%);font-size:10.5px;font-weight:600;letter-spacing:.15px;color:#eef9e6;background:rgba(12,28,21,.72);border:1px solid rgba(220,255,225,.22);border-radius:10px;padding:3px 8px;white-space:nowrap;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.micro-head{position:absolute;transform:translate(-50%,0);z-index:3;display:flex;align-items:baseline;gap:8px;padding:6px 14px;border-radius:16px;background:rgba(12,28,21,.7);border:1px solid rgba(220,255,225,.2);color:#eef9e6;font-size:13px;pointer-events:none;opacity:0;transition:opacity .4s .2s;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.micro-head span{font-size:11px;opacity:.7;font-variant-numeric:tabular-nums}
+.micro-close{position:absolute;transform:translate(-50%,-50%);z-index:3;opacity:0;transition:opacity .4s .2s}
+.micro-close svg{width:18px;height:18px}
+.micro-tabs{position:absolute;transform:translate(-50%,-50%);z-index:3;opacity:0;transition:opacity .4s .2s}
+.micro-tabs button{width:auto!important;padding:0 13px!important;border-radius:18px!important;font-size:11.5px;font-weight:600}
+.micro-tabs .micro-lbl{padding:0!important;width:35px!important}
+.micro-tabs .micro-lbl svg{width:16px;height:16px}
+.micro-caption{position:absolute;transform:translateY(-50%);z-index:3;padding:14px 16px;border-radius:18px;background:var(--glass);border:1px solid var(--edge);box-shadow:0 12px 36px #1a261f33;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);color:#2c4332;opacity:0;transition:opacity .4s .25s}
+.micro-caption p{margin:0 0 10px;font-size:12px;line-height:1.5}
+.micro-caption small{display:block;margin-top:9px;font-size:10px;opacity:.65}
+.micro-legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:10.5px;font-weight:600}
+.micro-legend .lg{display:inline-flex;align-items:center;gap:5px}.micro-legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.lg-water i{background:#4aa8ff;box-shadow:0 0 6px #4aa8ff}.lg-sugar i{background:#f0a02a;border-radius:2px}.lg-co2 i{background:#9aa3ad}.lg-o2 i{background:#2ed0ff}
+.microscope.open .micro-head,.microscope.open .micro-close,.microscope.open .micro-tabs,.microscope.open .micro-caption{opacity:1}
+@media(max-width:600px){.micro-head{font-size:11.5px;padding:5px 11px}.micro-tabs button{padding:0 10px!important;font-size:10.5px}.micro-tag{font-size:9.5px;padding:2px 6px}}
+#scene{position:relative;z-index:1}
+.env-veil{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 38%,#34403a 0%,#1a2320 55%,#0d1311 100%);transition:opacity .2s linear}
+.tool-sep{width:1px;height:22px;margin:0 4px;background:#b9c8ad8c}
+.tool-label{font-size:10px;font-weight:650;color:#7a6a2c;margin:0 4px 0 1px;white-space:nowrap;letter-spacing:.2px}
+.tool-button.whatif.active{background:#b7791f;color:#fff8e6;box-shadow:0 2px 6px #6b4a0f33}
+@media(max-width:1240px){.tool-sep{width:22px;height:1px;margin:3px 0}.tool-label{margin:2px 0 0;font-size:9px}}
+.trop-tag{position:absolute;transform:translate(-50%,-50%);font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap;pointer-events:none;background:#fbfdf3e8;box-shadow:0 2px 9px #2c3a251f;border:1px solid #fff}
+.trop-g{color:#c0620f}.trop-w{color:#1d6fc4}.trop-d{color:#8a6a3a}.trop-n{color:#3f7fb8;transform:translate(-50%,-150%);border-style:dashed;border-color:#9cc6ea}.trop-e{color:#2d5739;transform:translate(-50%,-150%)}
+#compareButton.active{background:#3f7fb8;color:#f2f8ff}
+.measure-chip{position:absolute;transform:translate(-50%,-100%);pointer-events:none;z-index:4;border-radius:14px;background:#2f5a3de8;color:#f4f8ea;padding:6px 10px;font-size:10px;line-height:1.35;font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 6px 18px #2a3d2622}
+.measure-chip b{font-weight:650}
+.measure-chip small{display:block;opacity:.78;font-size:9px}
+.ruler-tick{position:absolute;transform:translate(-100%,-50%);pointer-events:none;z-index:3;font-size:8px;color:#3f5c3a;background:#fbfdf1c4;border-radius:6px;padding:1px 4px;font-variant-numeric:tabular-nums}
+@media(max-width:1240px){
+  #toolsMore{display:grid}
+  .tool-list{position:absolute;right:0;top:calc(100% + 10px);display:none;flex-direction:column;padding:5px;gap:3px;border-radius:24px;background:rgba(252,253,246,.96);box-shadow:0 14px 40px #35432c24}
+  .dock-tools.open .tool-list{display:flex}
+  .tool-button{width:36px;height:36px}
+}
+@media(max-width:600px){#toolsMore{width:36px;height:36px}.dock-tools{position:absolute;right:0;top:calc(100% + 8px);z-index:7}}
+@media(max-height:520px) and (min-width:700px){.tool-button{width:27px;height:27px}}
+
+</style>
+</head>
+<body>
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="i-leaf" viewBox="0 0 24 24"><path d="M5 19C2 9 9 4 21 3c0 12-5 17-13 14m-4 4L16 9m-8 8v-5m5 0h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z" fill="currentColor"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4v16M17 4v16" fill="none" stroke="currentColor" stroke-width="5"/></symbol>
+<symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 10a8 8 0 1 1 2 8M4 4v6h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-label" viewBox="0 0 24 24"><path d="M3 4h8l10 10-7 7L3 10z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7" cy="8" r="1.3" fill="currentColor"/></symbol>
+<symbol id="i-root" viewBox="0 0 24 24"><path d="M12 3v18m0-12L6 6m6 7l7-5m-7 9l-7-5m7 7l6-4M6 6V3m13 5V4M5 12l-3 1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="i-seed" viewBox="0 0 24 24"><path d="M17 3c6 3 5 11 0 16S3 19 3 13 9 6 11 8s-1 5 2 5 0-8 4-10z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+<symbol id="i-flower" viewBox="0 0 24 24"><path d="M12 8c-7-8-12 3-5 5-8 6 3 12 5 5 4 7 14-1 6-5 7-4 0-13-6-5z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="13" r="2" fill="currentColor"/></symbol>
+<symbol id="i-fruit" viewBox="0 0 24 24"><path d="M19 3C7 3 1 11 5 21 17 20 21 13 19 3zM6 20 18 5m1-2 2-2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="m9 13 2 2m1-6 2 2" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-full" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="i-plant" viewBox="0 0 24 24"><path d="M12 21V7m0 8c-6 0-9-4-9-8 6 0 9 3 9 8zm0-5c0-5 3-8 9-8 0 5-3 8-9 8zM5 22h14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 10v7m0-11v1" stroke="currentColor" stroke-width="1.8"/></symbol>
+<symbol id="i-orbit" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-28 12 12)" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 5v14M17 5v14M3 9.5h4m10 0h4M3 14.5h4m10 0h4" stroke="currentColor" stroke-width="1.3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 2.5v2.2m0 14.6v2.2M2.5 12h2.2m14.6 0h2.2M5.3 5.3l1.6 1.6m10.2 10.2 1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="i-photo" viewBox="0 0 24 24"><circle cx="17.2" cy="6.3" r="2.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M17.2 1.6v1.1m0 7.2v1.1M12.5 6.3h1.1m7.2 0h1.1M13.9 3l.8.8m5.1 5.1.8.8m0-6.7-.8.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M3.6 20.4c-.4-6.6 3.6-10.6 10.2-10.4.3 6.5-3.7 10.6-10.2 10.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M3.8 20.2 10 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol><symbol id="i-micro" viewBox="0 0 24 24"><path d="M9.2 3.2l3.3 1.9-3.6 6.2-3.3-1.9z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8.2 2.6l1.9 1.1M5.6 9.4l3.3 1.9M7.3 10.4l-.9 1.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M13.6 9.8a5.2 5.2 0 0 1-2.2 8.9M4 20.6h13M8.6 20.6c0-1.5.7-2 2.4-2h1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="13.9" cy="8.9" r="1.1" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol><symbol id="i-nowater" viewBox="0 0 24 24"><path d="M12 3.4C9.2 7.3 6.4 10.5 6.4 14a5.6 5.6 0 0 0 11.2 0c0-3.5-2.8-6.7-5.6-10.6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M4.5 4.5l15 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol><symbol id="i-dark" viewBox="0 0 24 24"><path d="M19.2 14.6A7.6 7.6 0 0 1 9.4 4.8a7.6 7.6 0 1 0 9.8 9.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M16.4 3.8v2.4M15.2 5h2.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol><symbol id="i-sidelight" viewBox="0 0 24 24"><path d="M7.5 15.2c0-1.6-2.3-2.7-2.3-5.4a4.3 4.3 0 0 1 8.6 0c0 2.7-2.3 3.8-2.3 5.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.9 18h3.4M8.4 20.4h2.4M15.8 7.2l2.8-1.3M16.2 10.2h3.2M15.8 13.2l2.8 1.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol><symbol id="i-gravity" viewBox="0 0 24 24"><path d="M3.6 9.2l7.2-3.3 2.4 5.3-7.2 3.3z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M9.8 6.4c.9-1.6 2.6-2.4 4.2-2.1M12.5 8.6c1.6-.3 3 .4 3.8 1.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M18.8 11.5v8.2m-2.3-2.3 2.3 2.3 2.3-2.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-hydro" viewBox="0 0 24 24"><path d="M6.3 3.5C4.8 5.6 3.4 7.3 3.4 9a2.9 2.9 0 0 0 5.8 0c0-1.7-1.4-3.4-2.9-5.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M16.5 3v5.5c0 3.2-1.8 5.2-4.6 6.6-2.4 1.2-3.9 2.6-4.4 5.4M16.5 9.5c.3 2.6 1.6 4.4 3.8 5.6M12.4 14.8l-2.1-1.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol><symbol id="i-compare" viewBox="0 0 24 24"><path d="M8 20V9.5M8 13c-2.6 0-4.3-1.6-4.6-4.2C6 8.7 7.8 10.2 8 13zm0-2.2c.3-2.6 2.1-4.1 4.6-4.1-.3 2.6-2 4.1-4.6 4.1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M16 20c0-3.2.8-5.8 2.6-8M16.8 15.6c-2.4-.2-3.8-1.7-4-4 2.3.1 3.8 1.6 4 4zm1-3.5c.6-2.4 2.4-3.6 4.7-3.4-.6 2.4-2.4 3.6-4.7 3.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-dasharray="2 1.6"/></symbol><symbol id="i-twine" viewBox="0 0 24 24"><path d="M12 2.5v19" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8 19.5c3-.6 5.6-1.6 5.6-3.2S9.4 14.3 9.4 12.7s4.4-2.1 4.4-3.8S9.8 6.7 10 5.2c.1-.9 1.3-1.6 3.3-1.9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M13.6 9.4c1.6-1.3 3.6-1.4 5-.6-1.4 1.4-3.3 1.6-5 .6z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></symbol><symbol id="i-cutting" viewBox="0 0 24 24"><path d="M6.5 21h8.2l.9-9.2H5.6z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.1 16h9" stroke="currentColor" stroke-width="1.2" stroke-dasharray="1.6 1.4"/><path d="M10.6 18.5V6.5M10.6 9.5c-2.3-.1-3.6-1.4-3.8-3.4 2.1 0 3.6 1.3 3.8 3.4zm0-1.6c.3-2.2 1.8-3.6 4-3.6-.3 2.2-1.7 3.5-4 3.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M17.3 4.2l3.2 3.2m0-3.2-3.2 3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol><symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.2C9 7.3 6 10.6 6 14.3a6 6 0 0 0 12 0c0-3.7-3-7-6-11.1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9.3 14.6a2.8 2.8 0 0 0 2.4 2.7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+<symbol id="i-ruler" viewBox="0 0 24 24"><rect x="8" y="2.8" width="8" height="18.4" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7h3.5M8 10.5h2.2M8 14h3.5M8 17.5h2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3.2l1.6-2.3h6.4L16.8 8H20a1 1 0 0 1 1 1v9.2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="13.3" r="3.4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18" cy="12" r="1.6" fill="currentColor"/></symbol>
+<symbol id="i-tomato" viewBox="0 0 24 24"><circle cx="12" cy="14" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 7.5V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 6 10.5 4M15 6 13.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol></defs></svg>
+<main aria-label="Immersive plant growth model">
+ <section class="lab" id="lab" aria-label="Interactive three-dimensional plant model">
+  <div class="viewport" id="viewport">
+   <div id="plantSwitchFade" aria-hidden="true"></div><canvas id="scene" tabindex="0" aria-label="3D plant. Scroll to move up or down. Point at a fruit and scroll upward or click it for close-up zoom. Drag to rotate. Pinch or use + / − to zoom."></canvas>
+   <div class="viewport-head">
+    <div class="plant-tab-bar" role="group" aria-label="Choose plant"><button data-plant="bean" class="active" aria-pressed="true" title="Bean plant (Phaseolus vulgaris)"><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#i-seed"/></svg>Bean</button><button data-plant="tomato" aria-pressed="false" title="Tomato plant (Solanum lycopersicum)"><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#i-tomato"/></svg>Tomato</button></div><div class="view-options">
+     <div class="segmented" role="group" aria-label="Soil visibility">
+      <button data-soil="cutaway" class="active" aria-pressed="true" aria-label="Cutaway soil" title="Cutaway soil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 7v10l9 4 9-4V7zM3 7l9 4m0-8v8l9-4m-9 4v10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m12 11 9-4v10l-9 4z" fill="currentColor" opacity=".2"/></svg></button>
+      <button data-soil="xray" aria-pressed="false" aria-label="Transparent soil" title="X-ray soil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 4-9 4-9-4zM3 12l9 4 9-4M3 17l9 4 9-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+      <button data-soil="hidden" aria-pressed="false" aria-label="Hide soil" title="Hide soil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 4v10l-9 4-9-4V7zM3 7l9 4 9-4m-9 4v10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" opacity=".45"/><path d="m4 21 16-18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+     </div>
+     <button class="icon-button" id="labelsButton" aria-label="Toggle structure labels" aria-pressed="false" title="Structure labels (L)"><svg aria-hidden="true"><use href="#i-label"/></svg></button>
+     <div class="anatomy-toggle"><button class="icon-button" id="seedOpenButton" aria-pressed="false" title="Open seed · inspect the embryo"><svg aria-hidden="true"><use href="#i-seed"/></svg><span class="sr-only">Open seed</span></button><button class="icon-button" id="podOpenButton" aria-pressed="false" title="Open pods · inspect the new seeds" hidden><svg aria-hidden="true"><use href="#i-fruit"/></svg><span class="sr-only">Open pods</span></button></div><div class="dock-tools" id="dockTools" role="group" aria-label="Viewing tools"><button type="button" class="tool-button" id="toolsMore" aria-label="More viewing tools" aria-expanded="false" aria-controls="toolList" title="More viewing tools"><svg aria-hidden="true"><use href="#i-more"/></svg></button><div class="tool-list" id="toolList"><button type="button" class="tool-button" id="lightButton" data-mood="day" aria-label="Lighting mood" title="Lighting mood · Daylight"><svg aria-hidden="true"><use href="#i-sun"/></svg><span class="tool-dot" aria-hidden="true"></span></button><button type="button" class="tool-button" id="waterButton" aria-label="Water the plant" title="Water the plant"><svg aria-hidden="true"><use href="#i-drop"/></svg></button><button type="button" class="tool-button" id="photoButton" aria-pressed="false" aria-label="Show photosynthesis" title="Show photosynthesis (O)"><svg aria-hidden="true"><use href="#i-photo"/></svg></button><button type="button" class="tool-button" id="microButton" aria-pressed="false" aria-label="Microscope" title="Microscope (Z)"><svg aria-hidden="true"><use href="#i-micro"/></svg></button><button type="button" class="tool-button" id="measureButton" aria-pressed="false" aria-label="Measure growth" title="Measure growth (M)"><svg aria-hidden="true"><use href="#i-ruler"/></svg></button><button type="button" class="tool-button" id="snapshotButton" aria-label="Save a snapshot" title="Save a snapshot (P)"><svg aria-hidden="true"><use href="#i-camera"/></svg></button><span class="tool-sep" aria-hidden="true"></span><span class="tool-label" aria-hidden="true">What if?</span><button type="button" class="tool-button whatif" id="noWaterButton" aria-pressed="false" aria-label="What if · no water" title="What if · no water"><svg aria-hidden="true"><use href="#i-nowater"/></svg></button><button type="button" class="tool-button whatif" id="noLightButton" aria-pressed="false" aria-label="What if · no light" title="What if · no light"><svg aria-hidden="true"><use href="#i-dark"/></svg></button><button type="button" class="tool-button whatif" id="sideLightButton" aria-pressed="false" aria-label="What if · light from one side" title="What if · light from one side"><svg aria-hidden="true"><use href="#i-sidelight"/></svg></button><button type="button" class="tool-button whatif" id="gravityButton" aria-pressed="false" aria-label="What if · the pot is tipped over" title="What if · the pot is tipped over"><svg aria-hidden="true"><use href="#i-gravity"/></svg></button><button type="button" class="tool-button whatif" id="hydroButton" aria-pressed="false" aria-label="What if · water on one side only" title="What if · water on one side only"><svg aria-hidden="true"><use href="#i-hydro"/></svg></button><button type="button" class="tool-button whatif" id="twineButton" aria-pressed="false" aria-label="What if · give it a support stick" title="What if · give it a support stick"><svg aria-hidden="true"><use href="#i-twine"/></svg></button><button type="button" class="tool-button whatif" id="cuttingButton" aria-pressed="false" aria-label="Grow a new plant from a cutting" title="Grow a new plant from a cutting"><svg aria-hidden="true"><use href="#i-cutting"/></svg></button><button type="button" class="tool-button" id="compareButton" aria-pressed="false" aria-label="Compare with a normal plant" title="Compare with a normal plant"><svg aria-hidden="true"><use href="#i-compare"/></svg></button></div></div>
+    </div>
+    <div class="view-options utility-tools"><button class="icon-button" id="guideButton" aria-label="Educator guide and stage details" title="Guide & stage details"><svg aria-hidden="true"><use href="#i-info"/></svg></button><button class="icon-button" id="fullscreenButton" aria-label="Toggle full screen" title="Full screen"><svg aria-hidden="true"><use href="#i-full"/></svg></button></div>
+   </div>
+   <div id="labels" aria-label="Plant structure labels"></div><div id="measureLayer" aria-hidden="true" hidden></div><div id="fxLayer" aria-hidden="true"></div><div id="microscope" class="microscope" hidden><div class="micro-backdrop"></div><div class="micro-lens" id="microLens"><canvas id="microCanvas" aria-label="Microscope view"></canvas><div class="micro-labels" id="microLabels" aria-hidden="true"></div></div><div class="micro-head" id="microHead"><b id="microTitle">Leaf cross-section</b><span id="microMag">×400</span></div><button type="button" class="icon-button micro-close" id="microClose" aria-label="Close microscope" title="Close microscope"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button><div class="micro-tabs segmented" id="microTabs" role="group" aria-label="Specimen"><button type="button" data-micro="leaf" class="active" aria-pressed="true"><span>Leaf</span></button><button type="button" data-micro="stem" aria-pressed="false"><span>Stem</span></button><button type="button" data-micro="root" aria-pressed="false"><span>Root</span></button><button type="button" class="micro-lbl active" id="microLabelsToggle" aria-pressed="true" aria-label="Show labels" title="Show labels"><svg aria-hidden="true"><use href="#i-label"/></svg></button></div><div class="micro-caption" id="microCaption"><p id="microDesc"></p><div class="micro-legend" id="microLegend"></div><small id="microHint"></small></div></div>
+   <div class="view-rail"><div class="scroll-mode" role="group" aria-label="Scroll behavior"><button class="icon-button active" data-scroll-mode="move" aria-pressed="true" aria-label="Scroll to move up or down" title="Scroll to move up or down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="icon-button" data-scroll-mode="zoom" aria-pressed="false" aria-label="Scroll to zoom" title="Scroll to zoom"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m15 15 6 6M7 10h6M10 7v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button></div><button class="icon-button" id="moveUp" aria-label="Move view upward" title="Move view upward (↑ / Page Up)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="icon-button" id="moveDown" aria-label="Move view downward" title="Move view downward (↓ / Page Down)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 10 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="icon-button" id="zoomIn" aria-label="Zoom in" title="Zoom in (+)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button><button class="icon-button" id="zoomOut" aria-label="Zoom out" title="Zoom out (−)"><svg viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" stroke-width="1.5"/></svg></button><span class="rail-separator"></span><button class="icon-button" id="resetView" aria-label="Reset camera view" title="Reset view (R)"><svg><use href="#i-reset"/></svg></button><button class="icon-button" id="orbitButton" aria-label="Toggle automatic rotation" aria-pressed="false" title="Slowly rotate the model"><svg><use href="#i-orbit"/></svg></button></div>
+   <div class="view-bottom" id="focusDock"><div class="focus-bar" role="group" aria-label="Focus camera on a plant structure"><button data-focus="whole" class="active" aria-pressed="true" aria-label="Focus on whole plant"><svg aria-hidden="true"><use href="#i-plant"/></svg><span class="focus-name">Plant</span></button><button data-focus="seed" aria-pressed="false" aria-label="Focus on seed"><svg aria-hidden="true"><use href="#i-seed"/></svg><span class="focus-name">Seed</span></button><button data-focus="root" aria-pressed="false" aria-label="Focus on roots"><svg aria-hidden="true"><use href="#i-root"/></svg><span class="focus-name">Root</span></button><button data-focus="leaf" aria-pressed="false" aria-label="Focus on leaf"><svg aria-hidden="true"><use href="#i-leaf"/></svg><span class="focus-name">Leaf</span></button><button data-focus="flower" aria-pressed="false" aria-label="Focus on flower"><svg aria-hidden="true"><use href="#i-flower"/></svg><span class="focus-name">Flower</span></button><button data-focus="fruit" aria-pressed="false" aria-label="Focus on fruit"><svg aria-hidden="true"><use href="#i-fruit"/></svg><span class="focus-name">Fruit</span></button></div></div>
+   <aside class="detail-popover" id="detailPopover" aria-label="Selected structure" hidden><button class="close-detail" id="closeDetail" aria-label="Close structure information"><svg><use href="#i-close"/></svg></button><div class="eyebrow">Structure in focus</div><h3 id="detailTitle"></h3><p id="detailText"></p><button class="small-button" id="detailFocus">Move closer <span aria-hidden="true">↗</span></button></aside>
+   <div class="status-toast" id="toast" role="status"></div>
+   <div class="scene-error" id="sceneError" hidden><h3>3D rendering isn’t available</h3><p id="errorMessage">This model needs a browser with WebGL enabled. Open the downloaded file in a current desktop or mobile browser with hardware acceleration enabled.</p><button id="reloadButton">Reload model</button></div>
+  </div>
+  <div class="sequence" id="sequence" role="region" aria-label="Floating growth controls">
+   <div class="transport"><button class="play-button" id="playButton" aria-pressed="false" title="Play growth (Space)"><svg aria-hidden="true"><use href="#i-play"/></svg><span>Play growth</span></button><div class="progress-wrap" id="growthControls"><input type="range" id="growthSlider" min="0" max="700" value="0" step="1" aria-label="Plant growth timeline" aria-valuetext="Stage 1 of 8: The seed"></div><span class="dock-step" id="stageCounter" aria-hidden="true">01 / 08</span><label class="speed" id="speedControl"><select id="speedSelect" aria-label="Autoplay growth speed" title="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label><div class="language-switch" id="languageControl" role="group" aria-label="Language"><button type="button" data-language="zh" lang="zh-Hans" aria-label="使用华语" aria-pressed="false" title="使用华语">华语</button><button type="button" data-language="en" lang="en" class="active" aria-label="Use English" aria-pressed="true" title="Use English">English</button></div><button type="button" class="panel-toggle" id="panelToggle" aria-label="Collapse controls" title="Collapse controls" aria-expanded="true" aria-controls="growthControls speedControl languageControl stages focusDock"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+   <nav class="stages" id="stages" aria-label="Plant growth stages"></nav>
+   <span class="sr-only" id="timelineStatus" role="status">Ready to explore · Stage 1 of 8</span>
+  </div>
+ </section>
+</main>
+<template id="stageNotesTemplate"><section class="stage-notes" aria-label="Selected stage teaching notes"><div class="eyebrow" id="stagePhase">The beginning</div><h2 id="stageTitle">The seed</h2><p id="stageSubtitle">A protective coat. A food store. A tiny plant, waiting to grow.</p><h3>What changes</h3><p id="changeText"></p><h3>Look closely</h3><p id="observeText"></p><h3>Ask the class</h3><p id="questionText"></p></section><button class="small-button credits-button" id="aboutButton">About & credits</button></template>
+<dialog id="guideDialog"><button class="dialog-close" data-close="guideDialog" aria-label="Close guide">×</button><div class="eyebrow">A classroom companion</div><h2>Make every stage a discovery.</h2><p>Start with a question, let learners predict, then rotate or open the model to investigate. Each stage is a three-dimensional structure, and the timeline lets you revisit the changes between stages.</p><h3>Explore the model</h3><div class="controls-table"><span>Collapse the panel</span><span>Use the chevron at the right end of the bottom panel to hide the timeline and focus controls. Play / pause stays available in the compact pill. Click the chevron again to restore all controls.</span><span>Scroll up / down</span><span>Scroll upward to see higher leaves; scroll downward to return to the roots. Use the arrow buttons or ↑ / ↓ for the same movement.</span><span>Fruit close-up</span><span>Point at a fruit and scroll upward, or click it. Continue scrolling to zoom in or out; drag to rotate around that fruit. The Fruit button also selects a visible fruit.</span><span>Rotate</span><span>Drag with one finger or the left mouse button.</span><span>Zoom</span><span>Choose the magnifying-glass scroll mode, pinch, or use + / − to zoom. Shift + scroll always moves vertically.</span><span>Pan</span><span>Move two fingers together, right-drag, or Shift-drag.</span><span>Move between stages</span><span>Choose a stage, scrub the timeline, or use ← / →.</span><span>Play / pause</span><span>Space or the Play growth button. Autoplay stops after fruiting.</span><span>Reset camera</span><span>R or the circular-arrow button. The selected stage is preserved.</span><span>Show / hide labels</span><span>L or the label icon.</span><span>Viewing tools</span><span>In the top bar: lighting mood, watering, photosynthesis (O), microscope (Z), growth measurement (M), and snapshot (P). On small screens they sit behind the ⋯ button.</span><span>Keyboard rotation</span><span>When the 3D canvas is focused: W / A / S / D.</span></div><h3>Try a short investigation</h3><div data-species="bean"><ul><li><b>Seed → young root:</b> open the seed and locate the embryo between the two cotyledons. Which part emerges first?</li><li><b>Germination:</b> focus on the seed with Cutaway enabled. Follow the hooked hypocotyl as it lifts the cotyledons above the soil.</li><li><b>Growing leaves:</b> compare the first opposite pair of simple leaves with later trifoliate leaves (three leaflets per leaf).</li><li><b>Flowers → pods:</b> focus on a flower, advance to fruiting, then open the pods. Connect the ovary, fruit, and new seeds.</li></ul></div><div data-species="tomato" hidden><ul><li><b>Seed → hook:</b> focus on the seed during germination. Watch the thin hypocotyl form a hook and pull the cotyledons — still wearing the seed coat — out of the soil.</li><li><b>Seedling:</b> compare the two narrow, smooth cotyledons with the first lobed true leaves above them.</li><li><b>Compound leaves:</b> count the leaflets on one large leaf, including the tiny leaflets between the big pairs.</li><li><b>Flowers → fruit:</b> focus on a flower truss, advance to ripe fruit, then slice a tomato open. Find the locules, the jelly and the seeds.</li></ul></div><h3>About this organism</h3><div data-species="bean"><p>The model represents the common bean (<i>Phaseolus vulgaris</i>), a flowering dicot with epigeal germination. It is one example, not a universal plant life cycle: other species retain cotyledons underground or have different roots, flowers, and fruits. Bean pods are fruits; the beans inside them are seeds.</p><p>Opening the seed and pods is an exploded teaching view. Transitions are compressed, detail is enlarged for observation, and the stages do not represent equal periods of time. Mature roots extend beyond the small soil sample shown. Pollination is explained but not simulated.</p></div><div data-species="tomato" hidden><p>This model represents the tomato (<i>Solanum lycopersicum</i>), a flowering dicot with epigeal germination. Its tiny seed lifts two narrow cotyledons above the soil, often still capped by the seed coat. Tomato leaves are pinnately compound and hairy, the flowers are yellow and buzz-pollinated, and the fruit is a berry with seeds in jelly-filled locules.</p><p>Slicing the fruit is a teaching view. Transitions are compressed, fruit and leaves are enlarged for observation, and the stages do not represent equal periods of time. Measurements are approximate classroom estimates, not growth predictions.</p></div><label class="motion-option"><input id="motionCheckbox" type="checkbox"> Reduce motion (no ambient sway; direct camera and stage changes)</label></dialog>
+<dialog id="aboutDialog"><button class="dialog-close" data-close="aboutDialog" aria-label="Close about dialog">×</button><div class="eyebrow">Plant Growth Lab</div><h2>One file. A whole life cycle.</h2><p>All plant and soil geometry is generated procedurally. Three.js is embedded in this file. No network connection, external images, fonts, or 3D assets are required after download.</p><p>Educational representations of the common bean and the tomato, from seed to fruit. The models illustrate selected visible structures; they are not botanical scans or growth predictions.</p><h3>Three.js · MIT license</h3><p>Three.js r158. Copyright © 2010–2023 Three.js authors.</p><div class="license-text">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</div></dialog>
+<noscript><div class="noscript">Please enable JavaScript to explore the interactive plant model.</div></noscript>
+<!-- Three.js r158, distributed under the MIT license reproduced in About & credits. -->

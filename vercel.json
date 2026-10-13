@@ -6,6 +6,14 @@
       "destination": "/acebeemath/:match*"
     },
     {
+      "source": "/plant-growth-lab",
+      "destination": "/plant-growth-lab/index.html"
+    },
+    {
+      "source": "/plant-growth-lab/:match*",
+      "destination": "/plant-growth-lab/:match*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
